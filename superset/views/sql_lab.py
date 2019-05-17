@@ -18,7 +18,7 @@
 from typing import Callable
 
 from flask import g, redirect
-from flask_appbuilder import expose
+from flask_appbuilder import expose, ModelRestApi
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import has_access
 from flask_babel import gettext as __
@@ -76,6 +76,22 @@ appbuilder.add_view(
     category='Manage',
     category_label=__('Manage'),
     icon='fa-search')
+
+
+# class QueryApi(ModelRestApi):
+#     datamodel = SQLAInterface(Query)
+#
+#     list_title = QueryView.list_title
+#     show_title = QueryView.show_title
+#     add_title = QueryView.add_title
+#     edit_title = QueryView.edit_title
+#
+#     list_columns = QueryView.list_columns
+#     base_filters = QueryView.base_filters
+#     label_columns = QueryView.label_columns
+#
+#
+# appbuilder.add_api(QueryApi)
 
 
 class SavedQueryView(SupersetModelView, DeleteMixin):
