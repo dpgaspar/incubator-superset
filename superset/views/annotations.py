@@ -177,4 +177,3 @@ class AnnotationModelApi(ModelRestApi):  # noqa
 
 
 appbuilder.add_api(AnnotationModelApi)
-
