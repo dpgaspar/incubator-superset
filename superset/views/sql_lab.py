@@ -78,20 +78,21 @@ appbuilder.add_view(
     icon='fa-search')
 
 
-# class QueryApi(ModelRestApi):
-#     datamodel = SQLAInterface(Query)
-#
-#     list_title = QueryView.list_title
-#     show_title = QueryView.show_title
-#     add_title = QueryView.add_title
-#     edit_title = QueryView.edit_title
-#
-#     list_columns = QueryView.list_columns
-#     base_filters = QueryView.base_filters
-#     label_columns = QueryView.label_columns
-#
-#
-# appbuilder.add_api(QueryApi)
+class QueryApi(QueryView):
+    datamodel = SQLAInterface(Query)
+    resource_name = 'query'
+    allow_browser_login = True
+    list_title = QueryView.list_title
+    show_title = QueryView.show_title
+    add_title = QueryView.add_title
+    edit_title = QueryView.edit_title
+
+    list_columns = QueryView.list_columns
+    base_filters = QueryView.base_filters
+    label_columns = QueryView.label_columns
+
+
+appbuilder.add_api(QueryApi)
 
 
 class SavedQueryView(SupersetModelView, DeleteMixin):
@@ -148,6 +149,28 @@ appbuilder.add_link(
     href='/sqllab/my_queries/',
     icon='fa-save',
     category='SQL Lab')
+
+
+class SavedQueryApi(ModelRestApi):
+    datamodel = SQLAInterface(SavedQuery)
+    resource_name = 'savedquery'
+
+    allow_browser_login = True
+    list_title = SavedQueryView.list_columns
+    show_title = SavedQueryView.show_title
+    add_title = SavedQueryView.add_title
+    edit_title = SavedQueryView.edit_title
+
+    list_columns = SavedQueryView.list_columns
+    show_columns = SavedQueryView.show_columns
+    search_columns = SavedQueryView.search_columns
+    add_columns = SavedQueryView.add_columns
+    edit_columns = add_columns
+    base_order = SavedQueryView.order_columns
+    label_columns = SavedQueryView.label_columns
+
+
+appbuilder.add_api(SavedQueryApi)
 
 
 class SqlLab(BaseSupersetView):

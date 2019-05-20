@@ -56,6 +56,8 @@ appbuilder.add_view(
 
 class AnnotationLayerModelApi(ModelRestApi):  # noqa
     datamodel = SQLAInterface(AnnotationLayer)
+    allow_browser_login = True
+    resource_name = 'annotationlayer'
 
     list_title = AnnotationLayerModelView.list_title
     show_title = AnnotationLayerModelView.show_title
@@ -64,11 +66,8 @@ class AnnotationLayerModelApi(ModelRestApi):  # noqa
 
     list_columns = AnnotationLayerModelView.list_columns
     edit_columns = AnnotationLayerModelView.edit_columns
-
     add_columns = edit_columns
-
     label_columns = AnnotationLayerModelView.label_columns
-
     description_columns = AnnotationLayerModelView.description_columns
 
 
@@ -151,6 +150,7 @@ appbuilder.add_view(
 class AnnotationModelApi(ModelRestApi):  # noqa
     datamodel = SQLAInterface(Annotation)
     allow_browser_login = True
+    resource_name = 'annotation'
 
     list_title = AnnotationModelView.list_title
     show_title = AnnotationModelView.show_title
@@ -165,6 +165,15 @@ class AnnotationModelApi(ModelRestApi):  # noqa
     label_columns = AnnotationModelView.label_columns
 
     description_columns = AnnotationModelView.description_columns
+
+    def pre_add(self, obj):
+        if not obj.start_dttm:
+            obj.start_dttm = obj.end_dttm
+        elif not obj.end_dttm:
+            obj.end_dttm = obj.start_dttm
+
+    def pre_update(self, obj):
+        self.pre_add(obj)
 
 
 appbuilder.add_api(AnnotationModelApi)
