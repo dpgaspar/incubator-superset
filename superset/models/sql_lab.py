@@ -149,7 +149,6 @@ class Query(Model, ExtraJSONMixin):
 
 class SavedQuery(Model, AuditMixinNullable, ExtraJSONMixin):
     """ORM model for SQL query"""
-
     __tablename__ = 'saved_query'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('ab_user.id'), nullable=True)

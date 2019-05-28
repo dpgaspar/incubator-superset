@@ -157,13 +157,12 @@ class AnnotationModelApi(ModelRestApi):  # noqa
     add_title = AnnotationModelView.add_title
     edit_title = AnnotationModelView.edit_title
 
-    list_columns = AnnotationModelView.list_columns
-    edit_columns = AnnotationModelView.edit_columns
-
-    add_columns = edit_columns
-
     label_columns = AnnotationModelView.label_columns
 
+    list_columns = ['layer.id', 'layer.name', 'short_descr', 'start_dttm', 'end_dttm']
+    show_columns = list_columns
+    edit_columns = AnnotationModelView.edit_columns
+    add_columns = edit_columns
     description_columns = AnnotationModelView.description_columns
 
     def pre_add(self, obj):

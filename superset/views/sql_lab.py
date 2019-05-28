@@ -58,6 +58,7 @@ class QueryView(SupersetModelView):
     edit_title = _('Edit Query')
 
     list_columns = ['username', 'database_name', 'status', 'start_time', 'end_time']
+    order_columns = ['status', 'start_time', 'end_time']
     base_filters = [['id', QueryFilter, lambda: []]]
     label_columns = {
         'user': _('User'),
@@ -78,7 +79,7 @@ appbuilder.add_view(
     icon='fa-search')
 
 
-class QueryApi(QueryView):
+class QueryApi(ModelRestApi):
     datamodel = SQLAInterface(Query)
     resource_name = 'query'
     allow_browser_login = True
@@ -88,6 +89,7 @@ class QueryApi(QueryView):
     edit_title = QueryView.edit_title
 
     list_columns = QueryView.list_columns
+    order_columns = ['status', 'start_time', 'end_time']
     base_filters = QueryView.base_filters
     label_columns = QueryView.label_columns
 
@@ -106,6 +108,9 @@ class SavedQueryView(SupersetModelView, DeleteMixin):
     list_columns = [
         'label', 'user', 'database', 'schema', 'description',
         'modified', 'pop_tab_link']
+    order_columns = [
+        'label', 'schema', 'description',
+        'modified']
     show_columns = [
         'id', 'label', 'user', 'database',
         'description', 'sql', 'pop_tab_link']
@@ -161,12 +166,17 @@ class SavedQueryApi(ModelRestApi):
     add_title = SavedQueryView.add_title
     edit_title = SavedQueryView.edit_title
 
-    list_columns = SavedQueryView.list_columns
+    list_columns = list_columns = [
+        'label', 'user_id', 'database.database_name', 'schema', 'description',
+        'modified', 'pop_tab_link']
+    order_columns = [
+        'label', 'database.database_name', 'schema', 'description',
+        'modified']
     show_columns = SavedQueryView.show_columns
     search_columns = SavedQueryView.search_columns
     add_columns = SavedQueryView.add_columns
     edit_columns = add_columns
-    base_order = SavedQueryView.order_columns
+    base_order = SavedQueryView.base_order
     label_columns = SavedQueryView.label_columns
 
 
