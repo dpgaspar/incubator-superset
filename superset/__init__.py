@@ -203,6 +203,7 @@ with app.app_context():
         base_template='superset/base.html',
         indexview=MyIndexView,
         security_manager_class=custom_sm,
+        update_perms=False,  # Run `superset init` to update FAB's perms
     )
 
 security_manager = appbuilder.sm
@@ -230,7 +231,9 @@ def is_feature_enabled(feature):
 if conf.get('ENABLE_FLASK_COMPRESS'):
     Compress(app)
 
-Talisman(app, content_security_policy=None)
+if app.config['TALISMAN_ENABLED']:
+    talisman_config = app.config.get('TALISMAN_CONFIG')
+    Talisman(app, **talisman_config)
 
 # Hook that provides administrators a handle on the Flask APP
 # after initialization

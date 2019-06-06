@@ -112,6 +112,7 @@ Superset can be used to visualize data out of most databases:
 * Redshift
 * Clickhouse
 * Apache Kylin
+* Apache Drill
 * Google BigQuery
 * **more!** look for the availability of a SQLAlchemy dialect for your database
   to find out whether it will work with Superset
@@ -171,6 +172,7 @@ the world know they are using Superset. Join our growing community!
  1. [Airbnb](https://github.com/airbnb)
  1. [Airboxlab](https://foobot.io)
  1. [Aktia Bank plc](https://www.aktia.com)
+ 1. [American Express](https://www.americanexpress.com)
  1. [Amino](https://amino.com)
  1. [Apollo GraphQL](https://www.apollographql.com/)
  1. [Ascendica Development](http://ascendicadevelopment.com)

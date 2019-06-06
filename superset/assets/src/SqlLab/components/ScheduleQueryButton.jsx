@@ -19,10 +19,56 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import Form from 'react-jsonschema-form';
+import chrono from 'chrono-node';
+import { Col, FormControl, FormGroup, Row } from 'react-bootstrap';
 import { t } from '@superset-ui/translation';
 
 import Button from '../../components/Button';
 import ModalTrigger from '../../components/ModalTrigger';
+
+const validators = {
+  greater: (a, b) => a > b,
+  greater_equal: (a, b) => a >= b,
+  less: (a, b) => a < b,
+  less_equal: (a, b) => a <= b,
+};
+
+function getJSONSchema() {
+  const jsonSchema = window.featureFlags.SCHEDULED_QUERIES.JSONSCHEMA;
+  // parse date-time into usable value (eg, 'today' => `new Date()`)
+  Object.entries(jsonSchema.properties).forEach(([key, properties]) => {
+    if (properties.default && properties.format === 'date-time') {
+      jsonSchema.properties[key] = {
+        ...properties,
+        default: chrono.parseDate(properties.default).toISOString(),
+      };
+    }
+  });
+  return jsonSchema;
+}
+
+function getUISchema() {
+  return window.featureFlags.SCHEDULED_QUERIES.UISCHEMA;
+}
+
+function getValidationRules() {
+  return window.featureFlags.SCHEDULED_QUERIES.VALIDATION || [];
+}
+
+function getValidator() {
+  const rules = getValidationRules();
+  return (formData, errors) => {
+    rules.forEach((rule) => {
+      const test = validators[rule.name];
+      const args = rule.arguments.map(name => formData[name]);
+      const container = rule.container || rule.arguments.slice(-1)[0];
+      if (!test(...args)) {
+        errors[container].addError(rule.message);
+      }
+    });
+    return errors;
+  };
+}
 
 const propTypes = {
   defaultLabel: PropTypes.string,
@@ -31,11 +77,17 @@ const propTypes = {
   dbId: PropTypes.number.isRequired,
   animation: PropTypes.bool,
   onSchedule: PropTypes.func,
+  scheduleQueryWarning: PropTypes.string,
+  disabled: PropTypes.bool,
+  tooltip: PropTypes.string,
 };
 const defaultProps = {
   defaultLabel: t('Undefined'),
   animation: true,
   onSchedule: () => {},
+  scheduleQueryWarning: null,
+  disabled: false,
+  tooltip: null,
 };
 
 class ScheduleQueryButton extends React.PureComponent {
@@ -78,11 +130,53 @@ class ScheduleQueryButton extends React.PureComponent {
   }
   renderModalBody() {
     return (
-      <Form
-        schema={window.featureFlags.SCHEDULED_QUERIES.JSONSCHEMA}
-        uiSchema={window.featureFlags.SCHEDULED_QUERIES.UISCHEMA}
-        onSubmit={this.onSchedule}
-      />
+      <FormGroup>
+        <Row style={{ paddingBottom: '10px' }}>
+          <Col md={12}>
+            <label className="control-label" htmlFor="embed-height">
+              {t('Label')}
+            </label>
+            <FormControl
+              type="text"
+              placeholder={t('Label for your query')}
+              value={this.state.label}
+              onChange={this.onLabelChange}
+            />
+          </Col>
+        </Row>
+        <Row style={{ paddingBottom: '10px' }}>
+          <Col md={12}>
+            <label className="control-label" htmlFor="embed-height">
+              {t('Description')}
+            </label>
+            <FormControl
+              componentClass="textarea"
+              placeholder={t('Write a description for your query')}
+              value={this.state.description}
+              onChange={this.onDescriptionChange}
+            />
+          </Col>
+        </Row>
+        <Row>
+          <Col md={12}>
+            <Form
+              schema={getJSONSchema()}
+              uiSchema={getUISchema()}
+              onSubmit={this.onSchedule}
+              validate={getValidator()}
+            />
+          </Col>
+        </Row>
+        {this.props.scheduleQueryWarning && (
+          <Row>
+            <Col md={12}>
+              <small>
+                {this.props.scheduleQueryWarning}
+              </small>
+            </Col>
+          </Row>
+        )}
+      </FormGroup>
     );
   }
   render() {
@@ -93,7 +187,13 @@ class ScheduleQueryButton extends React.PureComponent {
           modalTitle={t('Schedule Query')}
           modalBody={this.renderModalBody()}
           triggerNode={
-            <Button bsSize="small" className="toggleSchedule" onClick={this.toggleSchedule}>
+            <Button
+              bsSize="small"
+              className="toggleSchedule"
+              onClick={this.toggleSchedule}
+              disabled={this.props.disabled}
+              tooltip={this.props.tooltip}
+            >
               <i className="fa fa-calendar" /> {t('Schedule Query')}
             </Button>
           }
