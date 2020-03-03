@@ -16,15 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-export default {
-  id: 1234,
-  slug: 'dashboardSlug',
-  metadata: {},
-  userId: 'mock_user_id',
-  dash_edit_perm: true,
-  dash_save_perm: true,
-  common: {
-    flash_messages: [],
-    conf: { ENABLE_JAVASCRIPT_CONTROLS: false, SUPERSET_WEBSERVER_TIMEOUT: 60 },
-  },
-};
+
+type CookieMap = { [cookieId: string]: string };
+
+export default function parseCookie(cookie = document.cookie): CookieMap {
+  return Object.fromEntries(
+    cookie
+      .split('; ')
+      .filter(x => x)
+      .map(x => x.split('=')),
+  );
+}

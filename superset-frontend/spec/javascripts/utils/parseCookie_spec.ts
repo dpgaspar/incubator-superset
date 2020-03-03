@@ -16,15 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-export default {
-  id: 1234,
-  slug: 'dashboardSlug',
-  metadata: {},
-  userId: 'mock_user_id',
-  dash_edit_perm: true,
-  dash_save_perm: true,
-  common: {
-    flash_messages: [],
-    conf: { ENABLE_JAVASCRIPT_CONTROLS: false, SUPERSET_WEBSERVER_TIMEOUT: 60 },
-  },
-};
+import parseCookie from 'src/utils/parseCookie';
+
+describe('parseCookie', () => {
+  let cookieVal = '';
+  Object.defineProperty(document, 'cookie', {
+    get: jest.fn().mockImplementation(() => {
+      return cookieVal;
+    }),
+  });
+  it('parses cookie strings', () => {
+    cookieVal = 'val1=foo; val2=bar';
+    expect(parseCookie()).toEqual({ val1: 'foo', val2: 'bar' });
+  });
+
+  it('parses empty cookie strings', () => {
+    cookieVal = '';
+    expect(parseCookie()).toEqual({});
+  });
+
+  it('accepts an arg', () => {
+    expect(parseCookie('val=foo')).toEqual({ val: 'foo' });
+  });
+});
