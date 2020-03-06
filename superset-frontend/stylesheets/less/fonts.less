@@ -16,19 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-{
-  "sourceMaps": true,
-  "retainLines": true,
-  "presets": ["airbnb", "@babel/preset-react", "@babel/preset-env"],
-  "plugins": [
-    "lodash",
-    "@babel/plugin-syntax-dynamic-import",
-    "@babel/plugin-proposal-class-properties",
-    "react-hot-loader/babel"
-  ],
-  "env": {
-    "test": {
-      "plugins": ["babel-plugin-dynamic-import-node"]
-    }
-  }
-}
+
+
+/*************************************************************************/
+/* USAGE NOTES                                                           */
+/* Each typeface used in Superset should have local webfont files.       */
+/* Maintain separate specimen sheets so it's easier to add/remove fonts. */
+/* NOTE: Add font all licenses to LICENSE.text                           */
+/*************************************************************************/
+
+/******************************* Inter UI ********************************/
+@import '../fonts/InterUI/specimen.less';
+
+/******************************* Fira Code ********************************/
+@import '../fonts/FiraCode/specimen.less';
