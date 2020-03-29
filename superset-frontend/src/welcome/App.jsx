@@ -17,7 +17,7 @@
  * under the License.
  */
 import React from 'react';
-import { hot } from 'react-hot-loader';
+import { hot } from 'react-hot-loader/root';
 import thunk from 'redux-thunk';
 import { createStore, applyMiddleware, compose, combineReducers } from 'redux';
 import { Provider } from 'react-redux';
@@ -26,6 +26,7 @@ import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
 import Menu from 'src/components/Menu/Menu';
 import DashboardList from 'src/views/dashboardList/DashboardList';
 import ChartList from 'src/views/chartList/ChartList';
+import DatasetList from 'src/views/datasetList/DatasetList';
 
 import messageToastReducer from '../messageToasts/reducers';
 import { initEnhancer } from '../reduxUtils';
@@ -62,10 +63,13 @@ const App = () => (
         <Route path="/chart/list/">
           <ChartList user={user} />
         </Route>
+        <Route path="/tablemodelview/list/">
+          <DatasetList user={user} />
+        </Route>
       </Switch>
       <ToastPresenter />
     </Router>
   </Provider>
 );
 
-export default hot(module)(App);
+export default hot(App);

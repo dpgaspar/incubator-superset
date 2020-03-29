@@ -19,6 +19,8 @@ import unittest
 import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+import hashlib
+import os
 from unittest.mock import Mock, patch
 
 import numpy
@@ -28,14 +30,16 @@ from sqlalchemy.exc import ArgumentError
 
 import tests.test_app
 from superset import app, db, security_manager
-from superset.exceptions import SupersetException
+from superset.exceptions import CertificateException, SupersetException
 from superset.models.core import Database
 from superset.utils.cache_manager import CacheManager
 from superset.utils.core import (
     base_json_conv,
     convert_legacy_filters_into_adhoc,
+    create_ssl_cert_file,
     datetime_f,
     format_timedelta,
+    get_iterable,
     get_or_create_db,
     get_since_until,
     get_stacktrace,
@@ -45,6 +49,7 @@ from superset.utils.core import (
     memoized,
     merge_extra_filters,
     merge_request_params,
+    parse_ssl_cert,
     parse_human_timedelta,
     parse_js_uri_path_item,
     parse_past_timedelta,
@@ -55,7 +60,10 @@ from superset.utils.core import (
     zlib_decompress,
 )
 from superset.views.utils import get_time_range_endpoints
+from superset.views.utils import build_extra_filters
 from tests.base_tests import SupersetTestCase
+
+from .fixtures.certificates import ssl_certificate
 
 
 def mock_parse_human_datetime(s):
@@ -950,3 +958,283 @@ class UtilsTestCase(SupersetTestCase):
                 get_time_range_endpoints(form_data={"datasource": "1__table"}, slc=slc),
                 (TimeRangeEndpoint.INCLUSIVE, TimeRangeEndpoint.EXCLUSIVE),
             )
+
+    def test_get_iterable(self):
+        self.assertListEqual(get_iterable(123), [123])
+        self.assertListEqual(get_iterable([123]), [123])
+        self.assertListEqual(get_iterable("foo"), ["foo"])
+
+    def test_build_extra_filters(self):
+        layout = {
+            "CHART-2ee52f30": {
+                "children": [],
+                "id": "CHART-2ee52f30",
+                "meta": {
+                    "chartId": 1020,
+                    "height": 38,
+                    "sliceName": "Chart 927",
+                    "width": 6,
+                },
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "TABS-N1zN4CIZP0",
+                    "TAB-asWdJzKmTN",
+                    "ROW-i_sG4ccXE",
+                ],
+                "type": "CHART",
+            },
+            "CHART-36bfc934": {
+                "children": [],
+                "id": "CHART-36bfc934",
+                "meta": {
+                    "chartId": 1018,
+                    "height": 26,
+                    "sliceName": "Region Filter",
+                    "width": 2,
+                },
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-W62P60D88",
+                    "ROW-1e064e3c",
+                    "COLUMN-fe3914b8",
+                ],
+                "type": "CHART",
+            },
+            "CHART-E_y2cuNHTv": {
+                "children": [],
+                "id": "CHART-E_y2cuNHTv",
+                "meta": {"chartId": 998, "height": 55, "sliceName": "MAP", "width": 6},
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-W62P60D88",
+                    "ROW-1e064e3c",
+                ],
+                "type": "CHART",
+            },
+            "CHART-JNxDOsAfEb": {
+                "children": [],
+                "id": "CHART-JNxDOsAfEb",
+                "meta": {
+                    "chartId": 1015,
+                    "height": 27,
+                    "sliceName": "Population",
+                    "width": 4,
+                },
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-W62P60D88",
+                    "ROW-1e064e3c",
+                    "COLUMN-fe3914b8",
+                ],
+                "type": "CHART",
+            },
+            "CHART-KoOwqalV80": {
+                "children": [],
+                "id": "CHART-KoOwqalV80",
+                "meta": {
+                    "chartId": 927,
+                    "height": 20,
+                    "sliceName": "Chart 927",
+                    "width": 4,
+                },
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "TABS-N1zN4CIZP0",
+                    "TAB-cHNWcBZC9",
+                    "ROW-9b9vrWKPY",
+                ],
+                "type": "CHART",
+            },
+            "CHART-YCQAPVK7mQ": {
+                "children": [],
+                "id": "CHART-YCQAPVK7mQ",
+                "meta": {
+                    "chartId": 1023,
+                    "height": 38,
+                    "sliceName": "World's Population",
+                    "width": 4,
+                },
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "ROW-UfxFT36oV5",
+                ],
+                "type": "CHART",
+            },
+            "COLUMN-fe3914b8": {
+                "children": ["CHART-36bfc934", "CHART-JNxDOsAfEb"],
+                "id": "COLUMN-fe3914b8",
+                "meta": {"background": "BACKGROUND_TRANSPARENT", "width": 6},
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-W62P60D88",
+                    "ROW-1e064e3c",
+                ],
+                "type": "COLUMN",
+            },
+            "DASHBOARD_VERSION_KEY": "v2",
+            "GRID_ID": {
+                "children": [],
+                "id": "GRID_ID",
+                "parents": ["ROOT_ID"],
+                "type": "GRID",
+            },
+            "HEADER_ID": {
+                "id": "HEADER_ID",
+                "meta": {"text": "Test warmup 1023"},
+                "type": "HEADER",
+            },
+            "ROOT_ID": {
+                "children": ["TABS-Qq4sdkANSY"],
+                "id": "ROOT_ID",
+                "type": "ROOT",
+            },
+            "ROW-1e064e3c": {
+                "children": ["COLUMN-fe3914b8", "CHART-E_y2cuNHTv"],
+                "id": "ROW-1e064e3c",
+                "meta": {"background": "BACKGROUND_TRANSPARENT"},
+                "parents": ["ROOT_ID", "TABS-Qq4sdkANSY", "TAB-W62P60D88"],
+                "type": "ROW",
+            },
+            "ROW-9b9vrWKPY": {
+                "children": ["CHART-KoOwqalV80"],
+                "id": "ROW-9b9vrWKPY",
+                "meta": {"background": "BACKGROUND_TRANSPARENT"},
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "TABS-N1zN4CIZP0",
+                    "TAB-cHNWcBZC9",
+                ],
+                "type": "ROW",
+            },
+            "ROW-UfxFT36oV5": {
+                "children": ["CHART-YCQAPVK7mQ"],
+                "id": "ROW-UfxFT36oV5",
+                "meta": {"background": "BACKGROUND_TRANSPARENT"},
+                "parents": ["ROOT_ID", "TABS-Qq4sdkANSY", "TAB-VrhTX2WUlO"],
+                "type": "ROW",
+            },
+            "ROW-i_sG4ccXE": {
+                "children": ["CHART-2ee52f30"],
+                "id": "ROW-i_sG4ccXE",
+                "meta": {"background": "BACKGROUND_TRANSPARENT"},
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "TABS-N1zN4CIZP0",
+                    "TAB-asWdJzKmTN",
+                ],
+                "type": "ROW",
+            },
+            "TAB-VrhTX2WUlO": {
+                "children": ["ROW-UfxFT36oV5", "TABS-N1zN4CIZP0"],
+                "id": "TAB-VrhTX2WUlO",
+                "meta": {"text": "New Tab"},
+                "parents": ["ROOT_ID", "TABS-Qq4sdkANSY"],
+                "type": "TAB",
+            },
+            "TAB-W62P60D88": {
+                "children": ["ROW-1e064e3c"],
+                "id": "TAB-W62P60D88",
+                "meta": {"text": "Tab 2"},
+                "parents": ["ROOT_ID", "TABS-Qq4sdkANSY"],
+                "type": "TAB",
+            },
+            "TAB-asWdJzKmTN": {
+                "children": ["ROW-i_sG4ccXE"],
+                "id": "TAB-asWdJzKmTN",
+                "meta": {"text": "nested tab 1"},
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "TABS-N1zN4CIZP0",
+                ],
+                "type": "TAB",
+            },
+            "TAB-cHNWcBZC9": {
+                "children": ["ROW-9b9vrWKPY"],
+                "id": "TAB-cHNWcBZC9",
+                "meta": {"text": "test2d tab 2"},
+                "parents": [
+                    "ROOT_ID",
+                    "TABS-Qq4sdkANSY",
+                    "TAB-VrhTX2WUlO",
+                    "TABS-N1zN4CIZP0",
+                ],
+                "type": "TAB",
+            },
+            "TABS-N1zN4CIZP0": {
+                "children": ["TAB-asWdJzKmTN", "TAB-cHNWcBZC9"],
+                "id": "TABS-N1zN4CIZP0",
+                "meta": {},
+                "parents": ["ROOT_ID", "TABS-Qq4sdkANSY", "TAB-VrhTX2WUlO"],
+                "type": "TABS",
+            },
+            "TABS-Qq4sdkANSY": {
+                "children": ["TAB-VrhTX2WUlO", "TAB-W62P60D88"],
+                "id": "TABS-Qq4sdkANSY",
+                "meta": {},
+                "parents": ["ROOT_ID"],
+                "type": "TABS",
+            },
+        }
+        filter_scopes = {
+            "1018": {
+                "region": {"scope": ["TAB-W62P60D88"], "immune": [998]},
+                "country_name": {"scope": ["ROOT_ID"], "immune": [927, 998]},
+            }
+        }
+        default_filters = {
+            "1018": {"region": ["North America"], "country_name": ["United States"]}
+        }
+
+        # immune to all filters
+        slice_id = 998
+        extra_filters = build_extra_filters(
+            layout, filter_scopes, default_filters, slice_id
+        )
+        expected = []
+        self.assertEqual(extra_filters, expected)
+
+        # in scope
+        slice_id = 1015
+        extra_filters = build_extra_filters(
+            layout, filter_scopes, default_filters, slice_id
+        )
+        expected = [
+            {"col": "region", "op": "in", "val": ["North America"]},
+            {"col": "country_name", "op": "in", "val": ["United States"]},
+        ]
+        self.assertEqual(extra_filters, expected)
+
+        # not in scope
+        slice_id = 927
+        extra_filters = build_extra_filters(
+            layout, filter_scopes, default_filters, slice_id
+        )
+        expected = []
+        self.assertEqual(extra_filters, expected)
+
+    def test_ssl_certificate_parse(self):
+        parsed_certificate = parse_ssl_cert(ssl_certificate)
+        self.assertEqual(parsed_certificate.serial_number, 12355228710836649848)
+        self.assertRaises(CertificateException, parse_ssl_cert, "abc" + ssl_certificate)
+
+    def test_ssl_certificate_file_creation(self):
+        path = create_ssl_cert_file(ssl_certificate)
+        expected_filename = hashlib.md5(ssl_certificate.encode("utf-8")).hexdigest()
+        self.assertIn(expected_filename, path)
+        self.assertTrue(os.path.exists(path))

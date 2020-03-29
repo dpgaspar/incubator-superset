@@ -441,6 +441,18 @@ class SqlaTable(Model, BaseDatasource):
         return self.name
 
     @property
+    def changed_by_name(self) -> str:
+        if not self.changed_by:
+            return ""
+        return str(self.changed_by)
+
+    @property
+    def changed_by_url(self) -> str:
+        if not self.changed_by:
+            return ""
+        return f"/superset/profile/{self.changed_by.username}"
+
+    @property
     def connection(self) -> str:
         return str(self.database)
 
@@ -1061,7 +1073,7 @@ class SqlaTable(Model, BaseDatasource):
     def get_sqla_table_object(self) -> Table:
         return self.database.get_table(self.table_name, schema=self.schema)
 
-    def fetch_metadata(self) -> None:
+    def fetch_metadata(self, commit=True) -> None:
         """Fetches the metadata for the table and merges it in"""
         try:
             table = self.get_sqla_table_object()
@@ -1074,7 +1086,6 @@ class SqlaTable(Model, BaseDatasource):
                 ).format(self.table_name)
             )
 
-        M = SqlMetric
         metrics = []
         any_date_col = None
         db_engine_spec = self.database.db_engine_spec
@@ -1111,7 +1122,7 @@ class SqlaTable(Model, BaseDatasource):
                 any_date_col = col.name
 
         metrics.append(
-            M(
+            SqlMetric(
                 metric_name="count",
                 verbose_name="COUNT(*)",
                 metric_type="count",
@@ -1122,7 +1133,8 @@ class SqlaTable(Model, BaseDatasource):
             self.main_dttm_col = any_date_col
         self.add_missing_metrics(metrics)
         db.session.merge(self)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @classmethod
     def import_obj(cls, i_datasource, import_time=None) -> int:

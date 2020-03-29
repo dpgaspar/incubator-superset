@@ -69,14 +69,14 @@ setup(
     install_requires=[
         "backoff>=1.8.0",
         "bleach>=3.0.2, <4.0.0",
-        "celery>=4.3.0, <5.0.0",
-        "click>=6.0, <7.0.0",  # `click`>=7 forces "-" instead of "_"
+        "celery>=4.3.0, <5.0.0, !=4.4.1",
+        "click<8",
         "colorama",
         "contextlib2",
         "croniter>=0.3.28",
         "cryptography>=2.4.2",
         "flask>=1.1.0, <2.0.0",
-        "flask-appbuilder==2.3.0rc4",
+        "flask-appbuilder==2.3.1rc1",
         "flask-caching",
         "flask-compress",
         "flask-talisman",

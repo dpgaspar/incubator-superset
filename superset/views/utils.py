@@ -27,6 +27,7 @@ from superset import app, db, viz
 from superset.connectors.connector_registry import ConnectorRegistry
 from superset.exceptions import SupersetException
 from superset.legacy import update_time_range
+from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.utils.core import QueryStatus, TimeRangeEndpoint
 
@@ -79,12 +80,11 @@ def get_permissions(user):
 
 
 def get_viz(
-    slice_id=None, form_data=None, datasource_type=None, datasource_id=None, force=False
+    form_data: Dict[str, Any],
+    datasource_type: str,
+    datasource_id: int,
+    force: bool = False,
 ):
-    if slice_id:
-        slc = db.session.query(Slice).filter_by(id=slice_id).one()
-        return slc.get_viz()
-
     viz_type = form_data.get("viz_type", "table")
     datasource = ConnectorRegistry.get_datasource(
         datasource_type, datasource_id, db.session
@@ -222,8 +222,9 @@ def get_time_range_endpoints(
     Note under certain circumstances the slice object may not exist, however the slice
     ID may be defined which serves as a fallback.
 
-    When SIP-15 is enabled all slices and will the [start, end) interval. If the grace
-    period is defined and has ended all slices will adhere to the [start, end) interval.
+    When SIP-15 is enabled all new slices will use the [start, end) interval. If the
+    grace period is defined and has ended all slices will adhere to the [start, end)
+    interval.
 
     :param form_data: The form-data
     :param slc: The slice
@@ -262,3 +263,90 @@ def get_time_range_endpoints(
         return (TimeRangeEndpoint(start), TimeRangeEndpoint(end))
 
     return (TimeRangeEndpoint.INCLUSIVE, TimeRangeEndpoint.EXCLUSIVE)
+
+
+# see all dashboard components type in
+# /superset-frontend/src/dashboard/util/componentTypes.js
+CONTAINER_TYPES = ["COLUMN", "GRID", "TABS", "TAB", "ROW"]
+
+
+def get_dashboard_extra_filters(
+    slice_id: int, dashboard_id: int
+) -> List[Dict[str, Any]]:
+    session = db.session()
+    dashboard = session.query(Dashboard).filter_by(id=dashboard_id).one_or_none()
+
+    # is chart in this dashboard?
+    if (
+        dashboard is None
+        or not dashboard.json_metadata
+        or not dashboard.slices
+        or not any([slc for slc in dashboard.slices if slc.id == slice_id])
+    ):
+        return []
+
+    try:
+        # does this dashboard have default filters?
+        json_metadata = json.loads(dashboard.json_metadata)
+        default_filters = json.loads(json_metadata.get("default_filters", "null"))
+        if not default_filters:
+            return []
+
+        # are default filters applicable to the given slice?
+        filter_scopes = json_metadata.get("filter_scopes", {})
+        layout = json.loads(dashboard.position_json or "{}")
+
+        if (
+            isinstance(layout, dict)
+            and isinstance(filter_scopes, dict)
+            and isinstance(default_filters, dict)
+        ):
+            return build_extra_filters(layout, filter_scopes, default_filters, slice_id)
+    except json.JSONDecodeError:
+        pass
+
+    return []
+
+
+def build_extra_filters(
+    layout: Dict,
+    filter_scopes: Dict,
+    default_filters: Dict[str, Dict[str, List]],
+    slice_id: int,
+) -> List[Dict[str, Any]]:
+    extra_filters = []
+
+    # do not apply filters if chart is not in filter's scope or
+    # chart is immune to the filter
+    for filter_id, columns in default_filters.items():
+        scopes_by_filter_field = filter_scopes.get(filter_id, {})
+        for col, val in columns.items():
+            current_field_scopes = scopes_by_filter_field.get(col, {})
+            scoped_container_ids = current_field_scopes.get("scope", ["ROOT_ID"])
+            immune_slice_ids = current_field_scopes.get("immune", [])
+
+            for container_id in scoped_container_ids:
+                if slice_id not in immune_slice_ids and is_slice_in_container(
+                    layout, container_id, slice_id
+                ):
+                    extra_filters.append({"col": col, "op": "in", "val": val})
+
+    return extra_filters
+
+
+def is_slice_in_container(layout: Dict, container_id: str, slice_id: int) -> bool:
+    if container_id == "ROOT_ID":
+        return True
+
+    node = layout[container_id]
+    node_type = node.get("type")
+    if node_type == "CHART" and node.get("meta", {}).get("chartId") == slice_id:
+        return True
+
+    if node_type in CONTAINER_TYPES:
+        children = node.get("children", [])
+        return any(
+            is_slice_in_container(layout, child_id, slice_id) for child_id in children
+        )
+
+    return False

@@ -38,7 +38,7 @@ module.exports = {
         'prettier',
         'prettier/@typescript-eslint',
       ],
-      plugins: ['@typescript-eslint', 'prettier', 'react'],
+      plugins: ['@typescript-eslint/eslint-plugin', 'prettier', 'react'],
       rules: {
         '@typescript-eslint/ban-ts-ignore': 0,
         '@typescript-eslint/camelcase': [
@@ -48,6 +48,7 @@ module.exports = {
             properties: 'never',
           },
         ],
+        '@typescript-eslint/no-empty-function': 0,
         '@typescript-eslint/no-explicit-any': 0,
         '@typescript-eslint/explicit-function-return-type': 0,
         camelcase: 0,

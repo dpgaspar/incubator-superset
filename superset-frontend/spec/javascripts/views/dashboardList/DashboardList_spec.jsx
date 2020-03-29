@@ -24,12 +24,14 @@ import fetchMock from 'fetch-mock';
 
 import DashboardList from 'src/views/dashboardList/DashboardList';
 import ListView from 'src/components/ListView/ListView';
+import PropertiesModal from 'src/dashboard/components/PropertiesModal';
 
 // store needed for withToasts(DashboardTable)
 const mockStore = configureStore([thunk]);
 const store = mockStore({});
 
 const dashboardsInfoEndpoint = 'glob:*/api/v1/dashboard/_info*';
+const dashboardOwnersEndpoint = 'glob:*/api/v1/dashboard/related/owners*';
 const dashboardsEndpoint = 'glob:*/api/v1/dashboard/?*';
 
 const mockDashboards = [...new Array(3)].map((_, i) => ({
@@ -45,7 +47,15 @@ const mockDashboards = [...new Array(3)].map((_, i) => ({
 
 fetchMock.get(dashboardsInfoEndpoint, {
   permissions: ['can_list', 'can_edit'],
-  filters: [],
+  filters: {
+    dashboard_title: [],
+    slug: [],
+    owners: [],
+    published: [],
+  },
+});
+fetchMock.get(dashboardOwnersEndpoint, {
+  result: [],
 });
 fetchMock.get(dashboardsEndpoint, {
   result: mockDashboards,
@@ -71,6 +81,11 @@ describe('DashboardList', () => {
     expect(callsI).toHaveLength(1);
   });
 
+  it('fetches owners', () => {
+    const callsO = fetchMock.calls(/dashboard\/related\/owners/);
+    expect(callsO).toHaveLength(1);
+  });
+
   it('fetches data', () => {
     wrapper.update();
     const callsD = fetchMock.calls(/dashboard\/\?q/);
@@ -78,5 +93,14 @@ describe('DashboardList', () => {
     expect(callsD[0][0]).toMatchInlineSnapshot(
       `"/http//localhost/api/v1/dashboard/?q={%22order_column%22:%22changed_on%22,%22order_direction%22:%22desc%22,%22page%22:0,%22page_size%22:25}"`,
     );
+  });
+
+  it('edits', async () => {
+    expect(wrapper.find(PropertiesModal)).toHaveLength(0);
+    wrapper
+      .find('.fa-pencil')
+      .first()
+      .simulate('click');
+    expect(wrapper.find(PropertiesModal)).toHaveLength(1);
   });
 });

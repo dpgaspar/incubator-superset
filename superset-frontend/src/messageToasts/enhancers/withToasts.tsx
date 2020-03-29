@@ -16,28 +16,31 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { t } from '@superset-ui/translation';
-import { NVD3TimeSeries } from './sections';
 
-export default {
-  controlPanelSections: [
-    NVD3TimeSeries[0],
-    {
-      label: t('Time Series Options'),
-      expanded: true,
-      controlSetRows: [['time_series_option']],
-    },
-    {
-      label: t('Chart Options'),
-      expanded: true,
-      controlSetRows: [
-        ['color_scheme', 'label_colors'],
-        ['number_format', 'date_time_format'],
-        ['partition_limit', 'partition_threshold'],
-        ['log_scale', 'equal_date_size'],
-        ['rich_tooltip'],
-      ],
-    },
-    NVD3TimeSeries[1],
-  ],
-};
+import { ComponentType } from 'react';
+import { bindActionCreators } from 'redux';
+import { connect } from 'react-redux';
+
+import {
+  addDangerToast,
+  addInfoToast,
+  addSuccessToast,
+  addWarningToast,
+} from '../actions';
+
+// To work properly the redux state must have a `messageToasts` subtree
+export default function withToasts(BaseComponent: ComponentType) {
+  return connect(null, dispatch =>
+    bindActionCreators(
+      {
+        addInfoToast,
+        addSuccessToast,
+        addWarningToast,
+        addDangerToast,
+      },
+      dispatch,
+    ),
+  )(BaseComponent) as any;
+  // Rsedux has some confusing typings that cause problems for consumers of this function.
+  // If someone can fix the types, great, but for now it's just any.
+}

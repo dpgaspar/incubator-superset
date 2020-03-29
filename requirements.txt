@@ -14,14 +14,14 @@ billiard==3.6.1.0         # via celery
 bleach==3.1.0
 celery==4.4.0
 cffi==1.13.2              # via cryptography
-click==6.7
-colorama==0.4.3
-contextlib2==0.6.0.post1
-croniter==0.3.31
-cryptography==2.8
+click==7.1.1              # via apache-superset (setup.py), flask, flask-appbuilder
+colorama==0.4.3           # via apache-superset (setup.py), flask-appbuilder
+contextlib2==0.6.0.post1  # via apache-superset (setup.py)
+croniter==0.3.31          # via apache-superset (setup.py)
+cryptography==2.8         # via apache-superset (setup.py)
 decorator==4.4.1          # via retry
 defusedxml==0.6.0         # via python3-openid
-flask-appbuilder==2.3.0rc4
+flask-appbuilder==2.3.1rc1
 flask-babel==1.0.0        # via flask-appbuilder
 flask-caching==1.8.0
 flask-compress==1.4.0

@@ -282,8 +282,10 @@ DEFAULT_FEATURE_FLAGS = {
     "ENABLE_EXPLORE_JSON_CSRF_PROTECTION": False,
     "KV_STORE": False,
     "PRESTO_EXPAND_DATA": False,
+    "REDUCE_DASHBOARD_BOOTSTRAP_PAYLOAD": False,
     "SHARE_QUERIES_VIA_KV_STORE": False,
     "TAGGING_SYSTEM": False,
+    "SQLLAB_BACKEND_PERSISTENCE": False,
 }
 
 # This is merely a default.
@@ -299,10 +301,11 @@ FEATURE_FLAGS: Dict[str, bool] = {}
 # role-based features, or a full on A/B testing framework.
 #
 # from flask import g, request
-# def GET_FEATURE_FLAGS_FUNC(feature_flags_dict):
-#     feature_flags_dict['some_feature'] = g.user and g.user.id == 5
+# def GET_FEATURE_FLAGS_FUNC(feature_flags_dict: Dict[str, bool]) -> Dict[str, bool]:
+#     if hasattr(g, "user") and g.user.is_active:
+#         feature_flags_dict['some_feature'] = g.user and g.user.id == 5
 #     return feature_flags_dict
-GET_FEATURE_FLAGS_FUNC = None
+GET_FEATURE_FLAGS_FUNC: Optional[Callable[[Dict[str, bool]], Dict[str, bool]]] = None
 
 
 # ---------------------------------------------------
@@ -794,6 +797,11 @@ SQLALCHEMY_EXAMPLES_URI = None
 # Typically these should not be allowed.
 PREVENT_UNSAFE_DB_CONNECTIONS = True
 
+# Path used to store SSL certificates that are generated when using custom certs.
+# Defaults to temporary directory.
+# Example: SSL_CERT_PATH = "/certs"
+SSL_CERT_PATH: Optional[str] = None
+
 # SIP-15 should be enabled for all new Superset deployments which ensures that the time
 # range endpoints adhere to [start, end). For existing deployments admins should provide
 # a dedicated period of time to allow chart producers to update their charts before
@@ -805,8 +813,8 @@ SIP_15_ENABLED = True
 SIP_15_GRACE_PERIOD_END: Optional[date] = None  # exclusive
 SIP_15_DEFAULT_TIME_RANGE_ENDPOINTS = ["unknown", "inclusive"]
 SIP_15_TOAST_MESSAGE = (
-    "Action Required: Preview then save your chart using the"
-    'new time range endpoints <a target="_blank" href="{url}"'
+    "Action Required: Preview then save your chart using the "
+    'new time range endpoints <a target="_blank" href="{url}" '
     'class="alert-link">here</a>.'
 )
 

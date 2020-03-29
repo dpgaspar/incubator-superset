@@ -16,27 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { bindActionCreators } from 'redux';
-import { connect } from 'react-redux';
 
-import {
-  addDangerToast,
-  addInfoToast,
-  addSuccessToast,
-  addWarningToast,
-} from '../actions';
+/**
+ * The Chart model as returned from the API
+ */
 
-// To work properly the redux state must have a `messageToasts` subtree
-export default function withToasts(BaseComponent) {
-  return connect(null, dispatch =>
-    bindActionCreators(
-      {
-        addInfoToast,
-        addSuccessToast,
-        addWarningToast,
-        addDangerToast,
-      },
-      dispatch,
-    ),
-  )(BaseComponent);
+export default interface Chart {
+  id: number;
+  url: string;
+  viz_type: string;
+  slice_name: string;
+  creator: string;
+  changed_on: string;
+  description: string | null;
+  cache_timeout: number | null;
 }

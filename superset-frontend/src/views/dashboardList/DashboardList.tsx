@@ -31,6 +31,7 @@ import {
   Filters,
 } from 'src/components/ListView/types';
 import withToasts from 'src/messageToasts/enhancers/withToasts';
+import PropertiesModal from 'src/dashboard/components/PropertiesModal';
 
 const PAGE_SIZE = 25;
 
@@ -48,6 +49,7 @@ interface State {
   owners: Array<{ text: string; value: number }>;
   permissions: string[];
   lastFetchDataConfig: FetchDataConfig | null;
+  dashboardToEdit: Dashboard | null;
 }
 
 interface Dashboard {
@@ -75,6 +77,7 @@ class DashboardList extends React.PureComponent<Props, State> {
     loading: false,
     owners: [],
     permissions: [],
+    dashboardToEdit: null,
   };
 
   componentDidMount() {
@@ -183,7 +186,7 @@ class DashboardList extends React.PureComponent<Props, State> {
     {
       Cell: ({ row: { state, original } }: any) => {
         const handleDelete = () => this.handleDashboardDelete(original);
-        const handleEdit = () => this.handleDashboardEdit(original);
+        const handleEdit = () => this.openDashboardEditModal(original);
         const handleExport = () => this.handleBulkDashboardExport([original]);
         if (!this.canEdit && !this.canDelete && !this.canExport) {
           return null;
@@ -251,8 +254,33 @@ class DashboardList extends React.PureComponent<Props, State> {
     return Boolean(this.state.permissions.find(p => p === perm));
   };
 
-  handleDashboardEdit = ({ id }: { id: number }) => {
-    window.location.assign(`/dashboard/edit/${id}`);
+  openDashboardEditModal = (dashboard: Dashboard) => {
+    this.setState({
+      dashboardToEdit: dashboard,
+    });
+  };
+
+  handleDashboardEdit = (edits: any) => {
+    this.setState({ loading: true });
+    return SupersetClient.get({
+      endpoint: `/api/v1/dashboard/${edits.id}`,
+    })
+      .then(({ json = {} }) => {
+        this.setState({
+          dashboards: this.state.dashboards.map(dashboard => {
+            if (dashboard.id === json.id) {
+              return json.result;
+            }
+            return dashboard;
+          }),
+          loading: false,
+        });
+      })
+      .catch(() => {
+        this.props.addDangerToast(
+          t('An error occurred while fetching Dashboards'),
+        );
+      });
   };
 
   handleDashboardDelete = ({
@@ -267,12 +295,12 @@ class DashboardList extends React.PureComponent<Props, State> {
         if (lastFetchDataConfig) {
           this.fetchData(lastFetchDataConfig);
         }
-        this.props.addSuccessToast(`${t('Deleted')} ${dashboardTitle}`);
+        this.props.addSuccessToast(t('Deleted: %s', dashboardTitle));
       },
       (err: any) => {
         console.error(err);
         this.props.addDangerToast(
-          `${t('There was an issue deleting')}${dashboardTitle}`,
+          t('There was an issue deleting %s', dashboardTitle),
         );
       },
     );
@@ -388,59 +416,77 @@ class DashboardList extends React.PureComponent<Props, State> {
   };
 
   render() {
-    const { dashboards, dashboardCount, loading, filters } = this.state;
+    const {
+      dashboards,
+      dashboardCount,
+      loading,
+      filters,
+      dashboardToEdit,
+    } = this.state;
 
     return (
       <div className="container welcome">
         <Panel>
-          <ConfirmStatusChange
-            title={t('Please confirm')}
-            description={t(
-              'Are you sure you want to delete the selected dashboards?',
-            )}
-            onConfirm={this.handleBulkDashboardDelete}
-          >
-            {confirmDelete => {
-              const bulkActions = [];
-              if (this.canDelete) {
-                bulkActions.push({
-                  key: 'delete',
-                  name: (
-                    <>
-                      <i className="fa fa-trash" /> Delete
-                    </>
-                  ),
-                  onSelect: confirmDelete,
-                });
-              }
-              if (this.canExport) {
-                bulkActions.push({
-                  key: 'export',
-                  name: (
-                    <>
-                      <i className="fa fa-database" /> Export
-                    </>
-                  ),
-                  onSelect: this.handleBulkDashboardExport,
-                });
-              }
-              return (
-                <ListView
-                  className="dashboard-list-view"
-                  title={'Dashboards'}
-                  columns={this.columns}
-                  data={dashboards}
-                  count={dashboardCount}
-                  pageSize={PAGE_SIZE}
-                  fetchData={this.fetchData}
-                  loading={loading}
-                  initialSort={this.initialSort}
-                  filters={filters}
-                  bulkActions={bulkActions}
-                />
-              );
-            }}
-          </ConfirmStatusChange>
+          <Panel.Body>
+            <ConfirmStatusChange
+              title={t('Please confirm')}
+              description={t(
+                'Are you sure you want to delete the selected dashboards?',
+              )}
+              onConfirm={this.handleBulkDashboardDelete}
+            >
+              {confirmDelete => {
+                const bulkActions = [];
+                if (this.canDelete) {
+                  bulkActions.push({
+                    key: 'delete',
+                    name: (
+                      <>
+                        <i className="fa fa-trash" /> Delete
+                      </>
+                    ),
+                    onSelect: confirmDelete,
+                  });
+                }
+                if (this.canExport) {
+                  bulkActions.push({
+                    key: 'export',
+                    name: (
+                      <>
+                        <i className="fa fa-database" /> Export
+                      </>
+                    ),
+                    onSelect: this.handleBulkDashboardExport,
+                  });
+                }
+                return (
+                  <>
+                    {dashboardToEdit && (
+                      <PropertiesModal
+                        show
+                        dashboardId={dashboardToEdit.id}
+                        onHide={() => this.setState({ dashboardToEdit: null })}
+                        onDashboardSave={this.handleDashboardEdit}
+                      />
+                    )}
+                    <ListView
+                      className="dashboard-list-view"
+                      title={'Dashboards'}
+                      columns={this.columns}
+                      data={dashboards}
+                      count={dashboardCount}
+                      pageSize={PAGE_SIZE}
+                      fetchData={this.fetchData}
+                      loading={loading}
+                      initialSort={this.initialSort}
+                      filters={filters}
+                      bulkActions={bulkActions}
+                    />
+                  </>
+                );
+              }}
+            </ConfirmStatusChange>
+          </Panel.Body>
         </Panel>
       </div>
     );
