@@ -233,8 +233,7 @@ class ChartDataAggregateConfigField(fields.Dict):
 
 
 class ChartDataPostProcessingOperationOptionsSchema(Schema):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class ChartDataAggregateOptionsSchema(ChartDataPostProcessingOperationOptionsSchema):
@@ -661,6 +660,10 @@ class ChartDataQueryObjectSchema(Schema):
     timeseries_limit = fields.Integer(
         description="Maximum row count for timeseries queries. Default: `0`",
     )
+    timeseries_limit_metric = fields.Integer(
+        description="Maximum row count for timeseries queries. Default: `0`",
+        allow_none=True,
+    )
     row_limit = fields.Integer(
         description='Maximum row count. Default: `config["ROW_LIMIT"]`',
     )
@@ -722,7 +725,7 @@ class ChartDataQueryContextSchema(Schema):
 
     # pylint: disable=no-self-use
     @post_load
-    def make_query_context(self, data: Dict[str, Any]) -> QueryContext:
+    def make_query_context(self, data: Dict[str, Any], **kwargs) -> QueryContext:  # pylint: disable=unused-argument
         query_context = QueryContext(**data)
         return query_context
 

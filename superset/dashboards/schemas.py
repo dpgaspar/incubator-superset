@@ -18,7 +18,7 @@ import json
 import re
 from typing import Any, Dict, Union
 
-from marshmallow import fields, pre_load, Schema
+from marshmallow import fields, post_load, Schema
 from marshmallow.validate import Length, ValidationError
 
 from superset.exceptions import SupersetException
@@ -92,7 +92,7 @@ def validate_json_metadata(value: Union[bytes, bytearray, str]) -> None:
         value_obj = json.loads(value)
     except json.decoder.JSONDecodeError:
         raise ValidationError("JSON not valid")
-    errors = DashboardJSONMetadataSchema(strict=True).validate(value_obj, partial=False)
+    errors = DashboardJSONMetadataSchema().validate(value_obj, partial=False)
     if errors:
         raise ValidationError(errors)
 
@@ -110,8 +110,8 @@ class DashboardJSONMetadataSchema(Schema):
 
 
 class BaseDashboardSchema(Schema):
-    @pre_load
-    def pre_load(self, data: Dict[str, Any]) -> None:  # pylint: disable=no-self-use
+    @post_load
+    def pre_load(self, data: Dict[str, Any], **kwargs) -> None:  # pylint: disable=no-self-use
         if data.get("slug"):
             data["slug"] = data["slug"].strip()
             data["slug"] = data["slug"].replace(" ", "-")
@@ -133,7 +133,7 @@ class DashboardPostSchema(BaseDashboardSchema):
     )
     css = fields.String()
     json_metadata = fields.String(
-        description=json_metadata_description, validate=validate_json_metadata
+        description=json_metadata_description,
     )
     published = fields.Boolean(description=published_description)
 
