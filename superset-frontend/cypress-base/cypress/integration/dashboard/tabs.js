@@ -128,10 +128,11 @@ export default () =>
       cy.wait('@treemapRequest');
 
       // apply filter
-      cy.get('.Select-control')
+      cy.get('.Select__control').first().should('be.visible');
+      cy.get('.Select__control').first().click({ force: true });
+      cy.get('.Select__control input[type=text]')
         .first()
-        .find('input')
-        .first()
+        .should('be.visible')
         .type('South Asia{enter}', { force: true });
 
       // send new query from same tab
@@ -146,9 +147,7 @@ export default () =>
       });
 
       // click row level tab, send 1 more query
-      cy.get('.tab-content ul.nav.nav-tabs li')
-        .last()
-        .click();
+      cy.get('.tab-content ul.nav.nav-tabs li').last().click();
       cy.wait('@linechartRequest').then(xhr => {
         const requestFormData = xhr.request.body;
         const requestParams = JSON.parse(requestFormData.get('form_data'));
@@ -186,8 +185,9 @@ export default () =>
         .click();
       cy.get('.tab-content ul.nav.nav-tabs li')
         .first()
+        .should('be.visible')
         .click();
-      cy.get('span.Select-clear').click();
+      cy.get('.Select__clear-indicator').click();
 
       // trigger 1 new query
       cy.wait('@treemapRequest');

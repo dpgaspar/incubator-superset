@@ -279,7 +279,7 @@ LANGUAGES = {
 # For example, DEFAULT_FEATURE_FLAGS = { 'FOO': True, 'BAR': False } here
 # and FEATURE_FLAGS = { 'BAR': True, 'BAZ': True } in superset_config.py
 # will result in combined feature flags of { 'FOO': True, 'BAR': True, 'BAZ': True }
-DEFAULT_FEATURE_FLAGS = {
+DEFAULT_FEATURE_FLAGS: Dict[str, bool] = {
     # Experimental feature introducing a client (browser) cache
     "CLIENT_CACHE": False,
     "ENABLE_EXPLORE_JSON_CSRF_PROTECTION": False,
@@ -568,7 +568,7 @@ SQLLAB_CTAS_SCHEMA_NAME_FUNC: Optional[
     Callable[["Database", "models.User", str, str], str]
 ] = None
 
-# An instantiated derivative of werkzeug.contrib.cache.BaseCache
+# An instantiated derivative of cachelib.base.BaseCache
 # if enabled, it can be used to store the results of long-running queries
 # in SQL Lab by using the "Run Async" button/feature
 RESULTS_BACKEND = None
@@ -586,10 +586,26 @@ CSV_TO_HIVE_UPLOAD_S3_BUCKET = None
 # The directory within the bucket specified above that will
 # contain all the external tables
 CSV_TO_HIVE_UPLOAD_DIRECTORY = "EXTERNAL_HIVE_TABLES/"
+# Function that creates upload directory dynamically based on the
+# database used, user and schema provided.
+CSV_TO_HIVE_UPLOAD_DIRECTORY_FUNC: Callable[
+    ["Database", "models.User", str], Optional[str]
+] = lambda database, user, schema: CSV_TO_HIVE_UPLOAD_DIRECTORY
 
 # The namespace within hive where the tables created from
 # uploading CSVs will be stored.
 UPLOADED_CSV_HIVE_NAMESPACE = None
+
+# Function that computes the allowed schemas for the CSV uploads.
+# Allowed schemas will be a union of schemas_allowed_for_csv_upload
+# db configuration and a result of this function.
+
+# mypy doesn't catch that if case ensures list content being always str
+ALLOWED_USER_CSV_SCHEMA_FUNC: Callable[
+    ["Database", "models.User"], List[str]
+] = lambda database, user: [
+    UPLOADED_CSV_HIVE_NAMESPACE  # type: ignore
+] if UPLOADED_CSV_HIVE_NAMESPACE else []
 
 # A dictionary of items that gets merged into the Jinja context for
 # SQL Lab. The existing context gets updated with this dictionary,
@@ -751,6 +767,11 @@ WEBDRIVER_CONFIGURATION: Dict[Any, Any] = {}
 
 # The base URL to query for accessing the user interface
 WEBDRIVER_BASEURL = "http://0.0.0.0:8080/"
+# The base URL for the email report hyperlinks.
+WEBDRIVER_BASEURL_USER_FRIENDLY = WEBDRIVER_BASEURL
+# Time in seconds, selenium will wait for the page to load
+# and render for the email report.
+EMAIL_PAGE_RENDER_WAIT = 30
 
 # Send user to a link where they can report bugs
 BUG_REPORT_URL = None

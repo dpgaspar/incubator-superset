@@ -18,8 +18,9 @@ import functools
 import logging
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
+import dataclasses
 import simplejson as json
 import yaml
 from flask import abort, flash, g, get_flashed_messages, redirect, Response, session
@@ -44,11 +45,18 @@ from superset import (
     security_manager,
 )
 from superset.connectors.sqla import models
+from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import SupersetException, SupersetSecurityException
 from superset.translations.utils import get_language_pack
+from superset.typing import FlaskResponse
 from superset.utils import core as utils
 
 from .utils import bootstrap_user_data
+
+if TYPE_CHECKING:
+    from superset.connectors.druid.views import (  # pylint: disable=unused-import
+        DruidClusterModelView,
+    )
 
 FRONTEND_CONF_KEYS = (
     "SUPERSET_WEBSERVER_TIMEOUT",
@@ -66,7 +74,7 @@ logger = logging.getLogger(__name__)
 config = superset_app.config
 
 
-def get_error_msg():
+def get_error_msg() -> str:
     if conf.get("SHOW_STACKTRACE"):
         error_msg = traceback.format_exc()
     else:
@@ -78,7 +86,12 @@ def get_error_msg():
     return error_msg
 
 
-def json_error_response(msg=None, status=500, payload=None, link=None):
+def json_error_response(
+    msg: Optional[str] = None,
+    status: int = 500,
+    payload: Optional[Dict[str, Any]] = None,
+    link: Optional[str] = None,
+) -> Response:
     if not payload:
         payload = {"error": "{}".format(msg)}
     if link:
@@ -91,11 +104,27 @@ def json_error_response(msg=None, status=500, payload=None, link=None):
     )
 
 
-def json_success(json_msg, status=200):
+def json_errors_response(
+    errors: List[SupersetError],
+    status: int = 500,
+    payload: Optional[Dict[str, Any]] = None,
+) -> Response:
+    if not payload:
+        payload = {}
+
+    payload["errors"] = [dataclasses.asdict(error) for error in errors]
+    return Response(
+        json.dumps(payload, default=utils.json_iso_dttm_ser, ignore_nan=True),
+        status=status,
+        mimetype="application/json",
+    )
+
+
+def json_success(json_msg: str, status: int = 200) -> Response:
     return Response(json_msg, status=status, mimetype="application/json")
 
 
-def data_payload_response(payload_json, has_error=False):
+def data_payload_response(payload_json: str, has_error: bool = False) -> Response:
     status = 400 if has_error else 200
     return json_success(payload_json, status=status)
 
@@ -136,9 +165,9 @@ def handle_api_exception(f):
         try:
             return f(self, *args, **kwargs)
         except SupersetSecurityException as ex:
-            logger.exception(ex)
-            return json_error_response(
-                utils.error_msg_from_exception(ex), status=ex.status, link=ex.link
+            logger.warning(ex)
+            return json_errors_response(
+                errors=[ex.error], status=ex.status, payload=ex.payload
             )
         except SupersetException as ex:
             logger.exception(ex)
@@ -282,7 +311,7 @@ class SupersetModelView(ModelView):
     page_size = 100
     list_widget = SupersetListWidget
 
-    def render_app_template(self):
+    def render_app_template(self) -> FlaskResponse:
         payload = {
             "user": bootstrap_user_data(g.user),
             "common": common_bootstrap_payload(),
@@ -336,7 +365,9 @@ class YamlExportMixin:  # pylint: disable=too-few-public-methods
 
 
 class DeleteMixin:  # pylint: disable=too-few-public-methods
-    def _delete(self, primary_key):
+    def _delete(
+        self: Union[BaseView, "DeleteMixin", "DruidClusterModelView"], primary_key: int,
+    ) -> None:
         """
             Delete function logic, override to implement diferent logic
             deletes the record with primary_key = primary_key
@@ -344,11 +375,11 @@ class DeleteMixin:  # pylint: disable=too-few-public-methods
             :param primary_key:
                 record primary key to delete
         """
-        item = self.datamodel.get(primary_key, self._base_filters)
+        item = self.datamodel.get(primary_key, self._base_filters)  # type: ignore
         if not item:
             abort(404)
         try:
-            self.pre_delete(item)
+            self.pre_delete(item)  # type: ignore
         except Exception as ex:  # pylint: disable=broad-except
             flash(str(ex), "danger")
         else:
@@ -361,8 +392,8 @@ class DeleteMixin:  # pylint: disable=too-few-public-methods
                 .all()
             )
 
-            if self.datamodel.delete(item):
-                self.post_delete(item)
+            if self.datamodel.delete(item):  # type: ignore
+                self.post_delete(item)  # type: ignore
 
                 for pv in pvs:
                     security_manager.get_session.delete(pv)
@@ -372,8 +403,8 @@ class DeleteMixin:  # pylint: disable=too-few-public-methods
 
                 security_manager.get_session.commit()
 
-            flash(*self.datamodel.message)
-            self.update_redirect()
+            flash(*self.datamodel.message)  # type: ignore
+            self.update_redirect()  # type: ignore
 
     @action(
         "muldelete", __("Delete"), __("Delete all Really?"), "fa-trash", single=False
@@ -427,7 +458,11 @@ def check_ownership(obj: Any, raise_if_false: bool = True) -> bool:
         return False
 
     security_exception = SupersetSecurityException(
-        "You don't have the rights to alter [{}]".format(obj)
+        SupersetError(
+            error_type=SupersetErrorType.MISSING_OWNERSHIP_ERROR,
+            message="You don't have the rights to alter [{}]".format(obj),
+            level=ErrorLevel.ERROR,
+        )
     )
 
     if g.user.is_anonymous:

@@ -48,10 +48,10 @@ const OPERATORS_TO_SQL = {
 
 function translateToSql(adhocMetric, { useSimple } = {}) {
   if (adhocMetric.expressionType === EXPRESSION_TYPES.SIMPLE || useSimple) {
-    const isMulti = MULTI_OPERATORS.indexOf(adhocMetric.operator) >= 0;
+    const isMulti = MULTI_OPERATORS.has(adhocMetric.operator);
     const subject = adhocMetric.subject;
     const operator =
-      adhocMetric.operator && CUSTOM_OPERATORS.includes(adhocMetric.operator)
+      adhocMetric.operator && CUSTOM_OPERATORS.has(adhocMetric.operator)
         ? OPERATORS_TO_SQL[adhocMetric.operator](adhocMetric)
         : OPERATORS_TO_SQL[adhocMetric.operator];
     const comparator = Array.isArray(adhocMetric.comparator)
@@ -81,10 +81,7 @@ export default class AdhocFilter {
           ? adhocFilter.sqlExpression
           : translateToSql(adhocFilter, { useSimple: true });
       this.clause = adhocFilter.clause;
-      if (
-        adhocFilter.operator &&
-        CUSTOM_OPERATORS.includes(adhocFilter.operator)
-      ) {
+      if (adhocFilter.operator && CUSTOM_OPERATORS.has(adhocFilter.operator)) {
         this.subject = adhocFilter.subject;
         this.operator = adhocFilter.operator;
       } else {
@@ -94,27 +91,20 @@ export default class AdhocFilter {
       this.comparator = null;
     }
     this.isExtra = !!adhocFilter.isExtra;
-    this.fromFormData = !!adhocFilter.filterOptionName;
+    this.isNew = !!adhocFilter.isNew;
 
     this.filterOptionName =
       adhocFilter.filterOptionName ||
       `filter_${Math.random()
         .toString(36)
-        .substring(2, 15)}_${Math.random()
-        .toString(36)
-        .substring(2, 15)}`;
+        .substring(2, 15)}_${Math.random().toString(36).substring(2, 15)}`;
   }
 
   duplicateWith(nextFields) {
     return new AdhocFilter({
       ...this,
-      expressionType: this.expressionType,
-      subject: this.subject,
-      operator: this.operator,
-      clause: this.clause,
-      sqlExpression: this.sqlExpression,
-      fromFormData: this.fromFormData,
-      filterOptionName: this.filterOptionName,
+      // all duplicated fields are not new (i.e. will not open popup automatically)
+      isNew: false,
       ...nextFields,
     });
   }
@@ -135,13 +125,17 @@ export default class AdhocFilter {
         return !!(this.operator && this.subject);
       }
 
-      return !!(
-        this.operator &&
-        this.subject &&
-        this.comparator &&
-        this.comparator.length > 0 &&
-        this.clause
-      );
+      if (this.operator && this.subject && this.clause) {
+        if (Array.isArray(this.comparator)) {
+          if (this.comparator.length > 0) {
+            // A non-empty array of values ('IN' or 'NOT IN' clauses)
+            return true;
+          }
+        } else if (this.comparator !== null) {
+          // A value has been selected or typed
+          return true;
+        }
+      }
     } else if (this.expressionType === EXPRESSION_TYPES.SQL) {
       return !!(this.sqlExpression && this.clause);
     }

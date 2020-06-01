@@ -14,18 +14,61 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Dict, List, Optional
-
+import tests.test_app
 from superset import db
+from superset.charts.schemas import ChartDataQueryContextSchema
 from superset.common.query_context import QueryContext
 from superset.connectors.connector_registry import ConnectorRegistry
-from superset.utils.core import TimeRangeEndpoint
+from superset.utils.core import (
+    ChartDataResponseFormat,
+    ChartDataResponseType,
+    TimeRangeEndpoint,
+)
 from tests.base_tests import SupersetTestCase
 from tests.fixtures.query_context import get_query_context
-from tests.test_app import app
 
 
 class QueryContextTests(SupersetTestCase):
+    def test_schema_deserialization(self):
+        """
+        Ensure that the deserialized QueryContext contains all required fields.
+        """
+
+        table_name = "birth_names"
+        table = self.get_table_by_name(table_name)
+        payload = get_query_context(
+            table.name, table.id, table.type, add_postprocessing_operations=True
+        )
+        query_context, errors = ChartDataQueryContextSchema().load(payload)
+        self.assertDictEqual(errors, {})
+        self.assertEqual(len(query_context.queries), len(payload["queries"]))
+        for query_idx, query in enumerate(query_context.queries):
+            payload_query = payload["queries"][query_idx]
+
+            # check basic properies
+            self.assertEqual(query.extras, payload_query["extras"])
+            self.assertEqual(query.filter, payload_query["filters"])
+            self.assertEqual(query.groupby, payload_query["groupby"])
+
+            # metrics are mutated during creation
+            for metric_idx, metric in enumerate(query.metrics):
+                payload_metric = payload_query["metrics"][metric_idx]
+                payload_metric = (
+                    payload_metric
+                    if "expressionType" in payload_metric
+                    else payload_metric["label"]
+                )
+                self.assertEqual(metric, payload_metric)
+
+            self.assertEqual(query.orderby, payload_query["orderby"])
+            self.assertEqual(query.time_range, payload_query["time_range"])
+
+            # check post processing operation properties
+            for post_proc_idx, post_proc in enumerate(query.post_processing):
+                payload_post_proc = payload_query["post_processing"][post_proc_idx]
+                self.assertEqual(post_proc["operation"], payload_post_proc["operation"])
+                self.assertEqual(post_proc["options"], payload_post_proc["options"])
+
     def test_cache_key_changes_when_datasource_is_updated(self):
         self.login(username="admin")
         table_name = "birth_names"
@@ -92,3 +135,55 @@ class QueryContextTests(SupersetTestCase):
         query_object = query_context.queries[0]
         self.assertEqual(query_object.granularity, "timecol")
         self.assertIn("having_druid", query_object.extras)
+
+    def test_csv_response_format(self):
+        """
+        Ensure that CSV result format works
+        """
+        self.login(username="admin")
+        table_name = "birth_names"
+        table = self.get_table_by_name(table_name)
+        payload = get_query_context(table.name, table.id, table.type)
+        payload["response_format"] = ChartDataResponseFormat.CSV.value
+        payload["queries"][0]["row_limit"] = 10
+        query_context = QueryContext(**payload)
+        responses = query_context.get_payload()
+        self.assertEqual(len(responses), 1)
+        data = responses[0]["data"]
+        self.assertIn("name,sum__num\n", data)
+        self.assertEqual(len(data.split("\n")), 12)
+
+    def test_samples_response_type(self):
+        """
+        Ensure that samples result type works
+        """
+        self.login(username="admin")
+        table_name = "birth_names"
+        table = self.get_table_by_name(table_name)
+        payload = get_query_context(table.name, table.id, table.type)
+        payload["response_type"] = ChartDataResponseType.SAMPLES.value
+        payload["queries"][0]["row_limit"] = 5
+        query_context = QueryContext(**payload)
+        responses = query_context.get_payload()
+        self.assertEqual(len(responses), 1)
+        data = responses[0]["data"]
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 5)
+        self.assertNotIn("sum__num", data[0])
+
+    def test_query_response_type(self):
+        """
+        Ensure that query result type works
+        """
+        self.login(username="admin")
+        table_name = "birth_names"
+        table = self.get_table_by_name(table_name)
+        payload = get_query_context(table.name, table.id, table.type)
+        payload["response_type"] = ChartDataResponseType.QUERY.value
+        query_context = QueryContext(**payload)
+        responses = query_context.get_payload()
+        self.assertEqual(len(responses), 1)
+        response = responses[0]
+        self.assertEqual(len(response), 2)
+        self.assertEqual(response["language"], "sql")
+        self.assertIn("SELECT", response["query"])

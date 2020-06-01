@@ -20,11 +20,12 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 import hashlib
+import json
 import os
 from unittest.mock import Mock, patch
 
 import numpy
-from flask import Flask
+from flask import Flask, g
 from flask_caching import Cache
 from sqlalchemy.exc import ArgumentError
 
@@ -37,7 +38,6 @@ from superset.utils.core import (
     base_json_conv,
     convert_legacy_filters_into_adhoc,
     create_ssl_cert_file,
-    datetime_f,
     format_timedelta,
     get_iterable,
     get_email_address_list,
@@ -60,8 +60,11 @@ from superset.utils.core import (
     zlib_compress,
     zlib_decompress,
 )
-from superset.views.utils import get_time_range_endpoints
-from superset.views.utils import build_extra_filters
+from superset.views.utils import (
+    build_extra_filters,
+    get_form_data,
+    get_time_range_endpoints,
+)
 from tests.base_tests import SupersetTestCase
 
 from .fixtures.certificates import ssl_certificate
@@ -555,17 +558,6 @@ class UtilsTestCase(SupersetTestCase):
         self.assertEquals(
             url_params["dashboard_ids"], form_data["url_params"]["dashboard_ids"]
         )
-
-    def test_datetime_f(self):
-        self.assertEqual(
-            datetime_f(datetime(1990, 9, 21, 19, 11, 19, 626096)),
-            "<nobr>1990-09-21T19:11:19.626096</nobr>",
-        )
-        self.assertEqual(len(datetime_f(datetime.now())), 28)
-        self.assertEqual(datetime_f(None), "<nobr>None</nobr>")
-        iso = datetime.now().isoformat()[:10].split("-")
-        [a, b, c] = [int(v) for v in iso]
-        self.assertEqual(datetime_f(datetime(a, b, c)), "<nobr>00:00:00</nobr>")
 
     def test_format_timedelta(self):
         self.assertEqual(format_timedelta(timedelta(0)), "0:00:00")
@@ -1249,3 +1241,62 @@ class UtilsTestCase(SupersetTestCase):
             get_email_address_list(",a@a; b@b c@c a-c@c; d@d, f@f"),
             ["a@a", "b@b", "c@c", "a-c@c", "d@d", "f@f"],
         )
+
+    def test_get_form_data_default(self) -> None:
+        with app.test_request_context():
+            form_data, slc = get_form_data()
+
+            self.assertEqual(
+                form_data,
+                {"time_range_endpoints": get_time_range_endpoints(form_data={}),},
+            )
+
+            self.assertEqual(slc, None)
+
+    def test_get_form_data_request_args(self) -> None:
+        with app.test_request_context(
+            query_string={"form_data": json.dumps({"foo": "bar"})}
+        ):
+            form_data, slc = get_form_data()
+
+            self.assertEqual(
+                form_data,
+                {
+                    "foo": "bar",
+                    "time_range_endpoints": get_time_range_endpoints(form_data={}),
+                },
+            )
+
+            self.assertEqual(slc, None)
+
+    def test_get_form_data_request_form(self) -> None:
+        with app.test_request_context(data={"form_data": json.dumps({"foo": "bar"})}):
+            form_data, slc = get_form_data()
+
+            self.assertEqual(
+                form_data,
+                {
+                    "foo": "bar",
+                    "time_range_endpoints": get_time_range_endpoints(form_data={}),
+                },
+            )
+
+            self.assertEqual(slc, None)
+
+    def test_get_form_data_request_args_and_form(self) -> None:
+        with app.test_request_context(
+            data={"form_data": json.dumps({"foo": "bar"})},
+            query_string={"form_data": json.dumps({"baz": "bar"})},
+        ):
+            form_data, slc = get_form_data()
+
+            self.assertEqual(
+                form_data,
+                {
+                    "baz": "bar",
+                    "foo": "bar",
+                    "time_range_endpoints": get_time_range_endpoints(form_data={}),
+                },
+            )
+
+            self.assertEqual(slc, None)

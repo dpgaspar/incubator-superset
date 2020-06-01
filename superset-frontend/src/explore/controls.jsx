@@ -67,12 +67,12 @@ import {
   validateNonEmpty,
 } from '@superset-ui/validator';
 
+import { ColumnOption } from '@superset-ui/control-utils';
 import {
   formatSelectOptionsForRange,
   formatSelectOptions,
   mainMetric,
 } from '../modules/utils';
-import ColumnOption from '../components/ColumnOption';
 import { TIME_FILTER_LABELS } from './constants';
 
 const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
@@ -125,6 +125,7 @@ const timeColumnOption = {
 
 const groupByControl = {
   type: 'SelectControl',
+  controlGroup: 'groupby',
   multi: true,
   freeForm: true,
   label: t('Group by'),
@@ -135,7 +136,7 @@ const groupByControl = {
   valueRenderer: c => <ColumnOption column={c} />,
   valueKey: 'column_name',
   allowAll: true,
-  filterOption: (opt, text) =>
+  filterOption: ({ label, value, data: opt }, text) =>
     (opt.column_name &&
       opt.column_name.toLowerCase().indexOf(text.toLowerCase()) >= 0) ||
     (opt.verbose_name &&
@@ -156,6 +157,7 @@ const groupByControl = {
 
 const metrics = {
   type: 'MetricsControl',
+  controlGroup: 'metrics',
   multi: true,
   label: t('Metrics'),
   validators: [validateNonEmpty],
@@ -395,6 +397,7 @@ export const controls = {
     type: 'MetricsControl',
     label: t('Sort By'),
     default: null,
+    clearable: true,
     description: t('Metric used to define the top series'),
     mapStateToProps: state => ({
       columns: state.datasource ? state.datasource.columns : [],

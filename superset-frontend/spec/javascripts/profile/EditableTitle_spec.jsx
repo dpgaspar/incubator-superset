@@ -20,7 +20,7 @@ import React from 'react';
 import { shallow } from 'enzyme';
 import sinon from 'sinon';
 
-import EditableTable from '../../../src/components/EditableTitle';
+import EditableTable from 'src/components/EditableTitle';
 
 describe('EditableTitle', () => {
   const callback = sinon.spy();
@@ -79,7 +79,7 @@ describe('EditableTitle', () => {
       expect(editableWrapper.find('input').props().type).toBe('text');
     });
     afterEach(() => {
-      callback.reset();
+      callback.resetHistory();
       editableWrapper.setState({ title: 'my title' });
       editableWrapper.setState({ lastTitle: 'my title' });
     });

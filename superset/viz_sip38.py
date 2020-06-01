@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from itertools import product
 from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
+import dataclasses
 import geohash
 import numpy as np
 import pandas as pd
@@ -47,6 +48,7 @@ from pandas.tseries.frequencies import to_offset
 
 from superset import app, cache, get_manifest_files, security_manager
 from superset.constants import NULL_STRING
+from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import (
     NullValueException,
     QueryObjectValidationError,
@@ -161,7 +163,7 @@ class BaseViz:
         self.status: Optional[str] = None
         self.error_msg = ""
         self.results: Optional[QueryResult] = None
-        self.error_message: Optional[str] = None
+        self.errors: List[Dict[str, Any]] = []
         self.force = force
         self.from_ddtm: Optional[datetime] = None
         self.to_dttm: Optional[datetime] = None
@@ -279,7 +281,7 @@ class BaseViz:
         self.results = self.datasource.query(query_obj)
         self.query = self.results.query
         self.status = self.results.status
-        self.error_message = self.results.error_message
+        self.errors = self.results.errors
 
         df = self.results.df
         # Transform the timestamp we received from database to pandas supported
@@ -440,7 +442,11 @@ class BaseViz:
         cache_dict["time_range"] = self.form_data.get("time_range")
         cache_dict["datasource"] = self.datasource.uid
         cache_dict["extra_cache_keys"] = self.datasource.get_extra_cache_keys(query_obj)
-        cache_dict["rls"] = security_manager.get_rls_ids(self.datasource)
+        cache_dict["rls"] = (
+            security_manager.get_rls_ids(self.datasource)
+            if config["ENABLE_ROW_LEVEL_SECURITY"]
+            else []
+        )
         cache_dict["changed_on"] = self.datasource.changed_on
         json_data = self.json_dumps(cache_dict, sort_keys=True)
         return hashlib.md5(json_data.encode("utf-8")).hexdigest()
@@ -497,8 +503,14 @@ class BaseViz:
                     is_loaded = True
             except Exception as ex:
                 logger.exception(ex)
-                if not self.error_message:
-                    self.error_message = "{}".format(ex)
+                error = dataclasses.asdict(
+                    SupersetError(
+                        message=str(ex),
+                        level=ErrorLevel.ERROR,
+                        error_type=SupersetErrorType.VIZ_GET_DF_ERROR,
+                    )
+                )
+                self.errors.append(error)
                 self.status = utils.QueryStatus.FAILED
                 stacktrace = utils.get_stacktrace()
 
@@ -530,7 +542,7 @@ class BaseViz:
             "cached_dttm": self._any_cached_dttm,
             "cache_timeout": self.cache_timeout,
             "df": df,
-            "error": self.error_message,
+            "errors": self.errors,
             "form_data": self.form_data,
             "is_cached": self._any_cache_key is not None,
             "query": self.query,
@@ -550,6 +562,7 @@ class BaseViz:
         has_error = (
             payload.get("status") == utils.QueryStatus.FAILED
             or payload.get("error") is not None
+            or len(payload.get("errors")) > 0
         )
         return self.json_dumps(payload), has_error
 
@@ -662,12 +675,6 @@ class TableViz(BaseViz):
         non_percent_metric_columns.extend(
             utils.get_metric_names(self.form_data.get("metrics") or [])
         )
-
-        timeseries_limit_metric = utils.get_metric_name(
-            self.form_data.get("timeseries_limit_metric")
-        )
-        if timeseries_limit_metric:
-            non_percent_metric_columns.append(timeseries_limit_metric)
 
         percent_metric_columns = utils.get_metric_names(
             self.form_data.get("percent_metrics") or []
@@ -1070,9 +1077,9 @@ class BubbleViz(NVD3Viz):
         form_data = self.form_data
         d = super().query_obj()
 
-        self.x_metric = form_data.get("x")
-        self.y_metric = form_data.get("y")
-        self.z_metric = form_data.get("size")
+        self.x_metric = form_data["x"]
+        self.y_metric = form_data["y"]
+        self.z_metric = form_data["size"]
         self.entity = form_data.get("entity")
         self.series = form_data.get("series") or self.entity
         d["row_limit"] = form_data.get("limit")
@@ -1116,20 +1123,6 @@ class BulletViz(NVD3Viz):
         d = super().query_obj()
         self.metric = form_data.get("metric")
 
-        def as_strings(field):
-            value = form_data.get(field)
-            return value.split(",") if value else []
-
-        def as_floats(field):
-            return [float(x) for x in as_strings(field)]
-
-        self.ranges = as_floats("ranges")
-        self.range_labels = as_strings("range_labels")
-        self.markers = as_floats("markers")
-        self.marker_labels = as_strings("marker_labels")
-        self.marker_lines = as_floats("marker_lines")
-        self.marker_line_labels = as_strings("marker_line_labels")
-
         d["metrics"] = [self.metric]
         if not self.metric:
             raise QueryObjectValidationError(_("Pick a metric to display"))
@@ -1140,12 +1133,6 @@ class BulletViz(NVD3Viz):
         values = df["metric"].values
         return {
             "measures": values.tolist(),
-            "ranges": self.ranges or [0, values.max() * 1.1],
-            "rangeLabels": self.range_labels or None,
-            "markers": self.markers or None,
-            "markerLabels": self.marker_labels or None,
-            "markerLines": self.marker_lines or None,
-            "markerLineLabels": self.marker_line_labels or None,
         }
 
 
@@ -1489,8 +1476,8 @@ class NVD3DualLineViz(NVD3Viz):
                 _("Pick a time granularity for your time series")
             )
 
-        metric = utils.get_metric_name(fd.get("metric"))
-        metric_2 = utils.get_metric_name(fd.get("metric_2"))
+        metric = utils.get_metric_name(fd["metric"])
+        metric_2 = utils.get_metric_name(fd["metric_2"])
         df = df.pivot_table(index=DTTM_ALIAS, values=[metric, metric_2])
 
         chart_data = self.to_series(df)
@@ -1545,7 +1532,7 @@ class NVD3TimePivotViz(NVD3TimeSeriesViz):
         df = df.pivot_table(
             index=DTTM_ALIAS,
             columns="series",
-            values=utils.get_metric_name(fd.get("metric")),
+            values=utils.get_metric_name(fd["metric"]),
         )
         chart_data = self.to_series(df)
         for serie in chart_data:
@@ -1723,8 +1710,12 @@ class SunburstViz(BaseViz):
         fd = self.form_data
         cols = fd.get("groupby") or []
         cols.extend(["m1", "m2"])
-        metric = utils.get_metric_name(fd.get("metric"))
-        secondary_metric = utils.get_metric_name(fd.get("secondary_metric"))
+        metric = utils.get_metric_name(fd["metric"])
+        secondary_metric = (
+            utils.get_metric_name(fd["secondary_metric"])
+            if "secondary_metric" in fd
+            else None
+        )
         if metric == secondary_metric or secondary_metric is None:
             df.rename(columns={df.columns[-1]: "m1"}, inplace=True)
             df["m2"] = df["m1"]
@@ -1881,8 +1872,12 @@ class WorldMapViz(BaseViz):
 
         fd = self.form_data
         cols = [fd.get("entity")]
-        metric = utils.get_metric_name(fd.get("metric"))
-        secondary_metric = utils.get_metric_name(fd.get("secondary_metric"))
+        metric = utils.get_metric_name(fd["metric"])
+        secondary_metric = (
+            utils.get_metric_name(fd["secondary_metric"])
+            if "secondary_metric" in fd
+            else None
+        )
         columns = ["country", "m1", "m2"]
         if metric == secondary_metric:
             ndf = df[cols]

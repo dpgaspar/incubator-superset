@@ -66,6 +66,7 @@ from superset import (
 from superset.connectors.connector_registry import ConnectorRegistry
 from superset.connectors.sqla.models import AnnotationDatasource
 from superset.constants import RouteMethod
+from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import (
     CertificateException,
     DatabaseNotFound,
@@ -85,7 +86,7 @@ from superset.security.analytics_db_safety import (
     check_sqlalchemy_uri,
     DBSecurityException,
 )
-from superset.sql_parse import ParsedQuery
+from superset.sql_parse import ParsedQuery, Table
 from superset.sql_validators import get_validator_by_name
 from superset.utils import core as utils, dashboard_import_export
 from superset.utils.dashboard_filter_scopes_converter import copy_filter_scopes
@@ -108,6 +109,7 @@ from .base import (
     get_user_roles,
     handle_api_exception,
     json_error_response,
+    json_errors_response,
     json_success,
     SupersetModelView,
     validate_sqlatable,
@@ -189,10 +191,22 @@ def check_datasource_perms(
             datasource_id, datasource_type, form_data
         )
     except SupersetException as ex:
-        raise SupersetSecurityException(str(ex))
+        raise SupersetSecurityException(
+            SupersetError(
+                error_type=SupersetErrorType.FAILED_FETCHING_DATASOURCE_INFO_ERROR,
+                level=ErrorLevel.ERROR,
+                message=str(ex),
+            )
+        )
 
     if datasource_type is None:
-        raise SupersetSecurityException("Could not determine datasource type")
+        raise SupersetSecurityException(
+            SupersetError(
+                error_type=SupersetErrorType.UNKNOWN_DATASOURCE_TYPE_ERROR,
+                level=ErrorLevel.ERROR,
+                message="Could not determine datasource type",
+            )
+        )
 
     viz_obj = get_viz(
         datasource_type=datasource_type,
@@ -622,10 +636,8 @@ class Superset(BaseSupersetView):
     def get_samples(self, viz_obj):
         return self.json_response({"data": viz_obj.get_samples()})
 
-    def generate_json(
-        self, viz_obj, csv=False, query=False, results=False, samples=False
-    ):
-        if csv:
+    def generate_json(self, viz_obj, response_type: Optional[str] = None) -> Response:
+        if response_type == utils.ChartDataResponseFormat.CSV:
             return CsvResponse(
                 viz_obj.get_csv(),
                 status=200,
@@ -633,13 +645,13 @@ class Superset(BaseSupersetView):
                 mimetype="application/csv",
             )
 
-        if query:
+        if response_type == utils.ChartDataResponseType.QUERY:
             return self.get_query_string_response(viz_obj)
 
-        if results:
+        if response_type == utils.ChartDataResponseType.RESULTS:
             return self.get_raw_results(viz_obj)
 
-        if samples:
+        if response_type == utils.ChartDataResponseType.SAMPLES:
             return self.get_samples(viz_obj)
 
         payload = viz_obj.get_payload()
@@ -673,6 +685,21 @@ class Superset(BaseSupersetView):
         form_data = get_form_data()[0]
         form_data["layer_id"] = layer_id
         form_data["filters"] = [{"col": "layer_id", "op": "==", "val": layer_id}]
+        # Set all_columns to ensure the TableViz returns the necessary columns to the
+        # frontend.
+        form_data["all_columns"] = [
+            "created_on",
+            "changed_on",
+            "id",
+            "start_dttm",
+            "end_dttm",
+            "layer_id",
+            "short_descr",
+            "long_descr",
+            "json_metadata",
+            "created_by_fk",
+            "changed_by_fk",
+        ]
         datasource = AnnotationDatasource()
         viz_obj = viz.viz_types["table"](datasource, form_data=form_data, force=False)
         payload = viz_obj.get_payload()
@@ -701,11 +728,14 @@ class Superset(BaseSupersetView):
         payloads based on the request args in the first block
 
         TODO: break into one endpoint for each return shape"""
-        csv = request.args.get("csv") == "true"
-        query = request.args.get("query") == "true"
-        results = request.args.get("results") == "true"
-        samples = request.args.get("samples") == "true"
-        force = request.args.get("force") == "true"
+        response_type = utils.ChartDataResponseFormat.JSON.value
+        responses = [resp_format for resp_format in utils.ChartDataResponseFormat]
+        responses.extend([resp_type for resp_type in utils.ChartDataResponseType])
+        for response_option in responses:
+            if request.args.get(response_option) == "true":
+                response_type = response_option
+                break
+
         form_data = get_form_data()[0]
 
         try:
@@ -717,12 +747,10 @@ class Superset(BaseSupersetView):
                 datasource_type=datasource_type,
                 datasource_id=datasource_id,
                 form_data=form_data,
-                force=force,
+                force=request.args.get("force") == "true",
             )
 
-            return self.generate_json(
-                viz_obj, csv=csv, query=query, results=results, samples=samples
-            )
+            return self.generate_json(viz_obj, response_type)
         except SupersetException as ex:
             return json_error_response(utils.error_msg_from_exception(ex))
 
@@ -932,6 +960,7 @@ class Superset(BaseSupersetView):
         payload = json.dumps(
             datasource.values_for_column(column, config["FILTER_SELECT_ROW_LIMIT"]),
             default=utils.json_int_dttm_ser,
+            ignore_nan=True,
         )
         return json_success(payload)
 
@@ -1644,6 +1673,7 @@ class Superset(BaseSupersetView):
             payload.append(d)
         return json_success(json.dumps(payload, default=utils.json_int_dttm_ser))
 
+    @event_logger.log_this
     @api
     @has_access_api
     @expose("/warm_up_cache/", methods=["GET"])
@@ -1686,9 +1716,9 @@ class Superset(BaseSupersetView):
             if not table:
                 return json_error_response(
                     __(
-                        "Table %(t)s wasn't found in the database %(d)s",
-                        t=table_name,
-                        s=db_name,
+                        "Table %(table)s wasn't found in the database %(db)s",
+                        table=table_name,
+                        db=db_name,
                     ),
                     status=404,
                 )
@@ -1707,14 +1737,22 @@ class Superset(BaseSupersetView):
                     form_data["extra_filters"] = get_dashboard_extra_filters(
                         slc.id, dashboard_id
                     )
+
                 obj = get_viz(
                     datasource_type=slc.datasource.type,
                     datasource_id=slc.datasource.id,
                     form_data=form_data,
                     force=True,
                 )
-                payload = obj.get_payload()
-                error = payload["error"]
+
+                # Temporarily define the form-data in the request context which may be
+                # leveraged by the Jinja macros.
+                with app.test_request_context(
+                    data={"form_data": json.dumps(form_data)}
+                ):
+                    payload = obj.get_payload()
+
+                error = payload["errors"] or None
                 status = payload["status"]
             except Exception as ex:
                 error = utils.error_msg_from_exception(ex)
@@ -2079,7 +2117,9 @@ class Superset(BaseSupersetView):
         schema = utils.parse_js_uri_path_item(schema, eval_undefined=True)
         table_name = utils.parse_js_uri_path_item(table_name)
         # Check that the user can access the datasource
-        if not self.appbuilder.sm.can_access_datasource(database, table_name, schema):
+        if not self.appbuilder.sm.can_access_datasource(
+            database, Table(table_name, schema), schema
+        ):
             stats_logger.incr(
                 f"deprecated.{self.__class__.__name__}.select_star.permission_denied"
             )
@@ -2124,7 +2164,7 @@ class Superset(BaseSupersetView):
             return json_error_response(str(ex))
 
         spec = mydb.db_engine_spec
-        query_cost_formatters = get_feature_flags().get(
+        query_cost_formatters: Dict[str, Any] = get_feature_flags().get(
             "QUERY_COST_FORMATTERS_BY_ENGINE", {}
         )
         query_cost_formatter = query_cost_formatters.get(
@@ -2176,8 +2216,9 @@ class Superset(BaseSupersetView):
             query.sql, query.database, query.schema
         )
         if rejected_tables:
-            return json_error_response(
-                security_manager.get_table_access_error_msg(rejected_tables), status=403
+            return json_errors_response(
+                [security_manager.get_table_access_error_object(rejected_tables)],
+                status=403,
             )
 
         payload = utils.zlib_decompress(blob, decode=not results_backend_use_msgpack)
@@ -2282,9 +2323,11 @@ class Superset(BaseSupersetView):
         except Exception as ex:
             logger.exception(ex)
             msg = _(
-                f"{validator.name} was unable to check your query.\n"
+                "%(validator)s was unable to check your query.\n"
                 "Please recheck your query.\n"
-                f"Exception: {ex}"
+                "Exception: %(ex)s",
+                validator=validator.name,
+                ex=ex,
             )
             # Return as a 400 if the database error message says we got a 4xx error
             if re.search(r"([\W]|^)4\d{2}([\W]|$)", str(ex)):
@@ -2299,14 +2342,14 @@ class Superset(BaseSupersetView):
         query: Query,
         expand_data: bool,
         log_params: Optional[Dict[str, Any]] = None,
-    ) -> str:
+    ) -> Response:
         """
             Send SQL JSON query to celery workers
 
         :param session: SQLAlchemy session object
         :param rendered_query: the rendered query to perform by workers
         :param query: The query (SQLAlchemy) object
-        :return: String JSON response
+        :return: A Flask Response
         """
         logger.info(f"Query {query.id}: Running query on a Celery worker")
         # Ignore the celery future object and the request may time out.
@@ -2350,13 +2393,13 @@ class Superset(BaseSupersetView):
         query: Query,
         expand_data: bool,
         log_params: Optional[Dict[str, Any]] = None,
-    ) -> str:
+    ) -> Response:
         """
             Execute SQL query (sql json)
 
         :param rendered_query: The rendered query (included templates)
         :param query: The query SQL (SQLAlchemy) object
-        :return: String JSON response
+        :return: A Flask Response
         """
         try:
             timeout = config["SQLLAB_TIMEOUT"]
@@ -2480,9 +2523,8 @@ class Superset(BaseSupersetView):
         if rejected_tables:
             query.status = QueryStatus.FAILED
             session.commit()
-            return json_error_response(
-                security_manager.get_table_access_error_msg(rejected_tables),
-                link=security_manager.get_table_access_link(rejected_tables),
+            return json_errors_response(
+                [security_manager.get_table_access_error_object(rejected_tables)],
                 status=403,
             )
 

@@ -99,14 +99,15 @@ def get_viz(
     return viz_obj
 
 
-def get_form_data(slice_id=None, use_slice_data=False):
+def get_form_data(
+    slice_id: Optional[int] = None, use_slice_data: bool = False
+) -> Tuple[Dict[str, Any], Optional[Slice]]:
     form_data = {}
-    post_data = request.form.get("form_data")
+    request_form_data = request.form.get("form_data")
     request_args_data = request.args.get("form_data")
-    # Supporting POST
-    if post_data:
-        form_data.update(json.loads(post_data))
-    # request params can overwrite post body
+    if request_form_data:
+        form_data.update(json.loads(request_form_data))
+    # request params can overwrite the body
     if request_args_data:
         form_data.update(json.loads(request_args_data))
 
@@ -115,7 +116,7 @@ def get_form_data(slice_id=None, use_slice_data=False):
         saved_url = db.session.query(models.Url).filter_by(id=url_id).first()
         if saved_url:
             url_str = parse.unquote_plus(
-                saved_url.url.split("?")[1][10:], encoding="utf-8", errors=None
+                saved_url.url.split("?")[1][10:], encoding="utf-8"
             )
             url_form_data = json.loads(url_str)
             # allow form_date in request override saved url

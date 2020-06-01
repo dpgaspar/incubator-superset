@@ -152,7 +152,7 @@ class Database(
     ]
     export_children = ["tables"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
     @property
@@ -165,7 +165,13 @@ class Database(
 
     @property
     def function_names(self) -> List[str]:
-        return self.db_engine_spec.get_function_names(self)
+        try:
+            return self.db_engine_spec.get_function_names(self)
+        except Exception as ex:  # pylint: disable=broad-except
+            # function_names property is used in bulk APIs and should not hard crash
+            # more info in: https://github.com/apache/incubator-superset/issues/9678
+            logger.error(f"Failed to fetch database function names with error: {ex}")
+        return []
 
     @property
     def allows_cost_estimate(self) -> bool:
@@ -228,7 +234,9 @@ class Database(
         return self.get_extra().get("default_schemas", [])
 
     @classmethod
-    def get_password_masked_url_from_uri(cls, uri: str):  # pylint: disable=invalid-name
+    def get_password_masked_url_from_uri(  # pylint: disable=invalid-name
+        cls, uri: str
+    ) -> URL:
         sqlalchemy_url = make_url(uri)
         return cls.get_password_masked_url(sqlalchemy_url)
 
@@ -273,7 +281,7 @@ class Database(
                 effective_username = g.user.username
         return effective_username
 
-    @utils.memoized(watch=("impersonate_user", "sqlalchemy_uri_decrypted", "extra"))
+    @utils.memoized(watch=["impersonate_user", "sqlalchemy_uri_decrypted", "extra"])
     def get_sqla_engine(
         self,
         schema: Optional[str] = None,
@@ -333,7 +341,7 @@ class Database(
     def get_reserved_words(self) -> Set[str]:
         return self.get_dialect().preparer.reserved_words
 
-    def get_quoter(self):
+    def get_quoter(self) -> Callable:
         return self.get_dialect().identifier_preparer.quote
 
     def get_df(  # pylint: disable=too-many-locals
@@ -399,7 +407,7 @@ class Database(
         indent: bool = True,
         latest_partition: bool = False,
         cols: Optional[List[Dict[str, Any]]] = None,
-    ):
+    ) -> str:
         """Generates a ``select *`` statement in the proper dialect"""
         eng = self.get_sqla_engine(schema=schema, source=utils.QuerySource.SQL_LAB)
         return self.db_engine_spec.select_star(
@@ -430,7 +438,10 @@ class Database(
         attribute_in_key="id",
     )
     def get_all_table_names_in_database(
-        self, cache: bool = False, cache_timeout: Optional[bool] = None, force=False
+        self,
+        cache: bool = False,
+        cache_timeout: Optional[bool] = None,
+        force: bool = False,
     ) -> List[utils.DatasourceName]:
         """Parameters need to be passed as keyword arguments."""
         if not self.allow_multi_schema_metadata_fetch:
@@ -541,7 +552,7 @@ class Database(
 
     @classmethod
     def get_db_engine_spec_for_backend(
-        cls, backend
+        cls, backend: str
     ) -> Type[db_engine_specs.BaseEngineSpec]:
         return db_engine_specs.engines.get(backend, db_engine_specs.BaseEngineSpec)
 
@@ -559,7 +570,7 @@ class Database(
     def get_extra(self) -> Dict[str, Any]:
         return self.db_engine_spec.get_extra_params(self)
 
-    def get_encrypted_extra(self):
+    def get_encrypted_extra(self) -> Dict[str, Any]:
         encrypted_extra = {}
         if self.encrypted_extra:
             try:
@@ -603,7 +614,13 @@ class Database(
     def get_schema_access_for_csv_upload(  # pylint: disable=invalid-name
         self,
     ) -> List[str]:
-        return self.get_extra().get("schemas_allowed_for_csv_upload", [])
+        allowed_databases = self.get_extra().get("schemas_allowed_for_csv_upload", [])
+        if hasattr(g, "user"):
+            extra_allowed_databases = config["ALLOWED_USER_CSV_SCHEMA_FUNC"](
+                self, g.user
+            )
+            allowed_databases += extra_allowed_databases
+        return sorted(set(allowed_databases))
 
     @property
     def sqlalchemy_uri_decrypted(self) -> str:
