@@ -111,11 +111,14 @@ class DashboardJSONMetadataSchema(Schema):
 
 class BaseDashboardSchema(Schema):
     @post_load
-    def pre_load(self, data: Dict[str, Any], **kwargs) -> None:  # pylint: disable=no-self-use
+    def pre_load(
+        self, data: Dict[str, Any], **kwargs
+    ) -> None:  # pylint: disable=no-self-use
         if data.get("slug"):
             data["slug"] = data["slug"].strip()
             data["slug"] = data["slug"].replace(" ", "-")
             data["slug"] = re.sub(r"[^\w\-]+", "", data["slug"])
+        return data
 
 
 class DashboardPostSchema(BaseDashboardSchema):
@@ -133,7 +136,7 @@ class DashboardPostSchema(BaseDashboardSchema):
     )
     css = fields.String()
     json_metadata = fields.String(
-        description=json_metadata_description,
+        description=json_metadata_description, validate=validate_json_metadata,
     )
     published = fields.Boolean(description=published_description)
 

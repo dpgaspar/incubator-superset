@@ -40,7 +40,7 @@ class DashboardApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         "slug": "slug1_changed",
         "position_json": '{"b": "B"}',
         "css": "css_changed",
-        "json_metadata": '{"a": "A"}',
+        "json_metadata": '{"refresh_frequency": 30}',
         "published": False,
     }
 
@@ -476,7 +476,7 @@ class DashboardApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
             "owners": [admin_id],
             "position_json": '{"a": "A"}',
             "css": "css",
-            "json_metadata": '{"b": "B"}',
+            "json_metadata": '{"refresh_frequency": 30}',
             "published": True,
         }
         self.login(username="admin")
@@ -555,7 +555,7 @@ class DashboardApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         rv = self.client.post(uri, json=dashboard_data)
         self.assertEqual(rv.status_code, 422)
         response = json.loads(rv.data.decode("utf-8"))
-        expected_response = {"message": {"slug": ["Must be unique"]}}
+        expected_response = {"message": {"slug": "Must be unique"}}
         self.assertEqual(response, expected_response)
 
         # Check for slug max size
@@ -580,7 +580,7 @@ class DashboardApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         rv = self.client.post(uri, json=dashboard_data)
         self.assertEqual(rv.status_code, 422)
         response = json.loads(rv.data.decode("utf-8"))
-        expected_response = {"message": {"owners": ["Owners are invalid"]}}
+        expected_response = {"message": {"owners": "Owners are invalid"}}
         self.assertEqual(response, expected_response)
 
     def test_create_dashboard_validate_json(self):
@@ -753,7 +753,7 @@ class DashboardApiTests(SupersetTestCase, ApiOwnersTestCaseMixin):
         rv = self.client.put(uri, json=dashboard_data)
         self.assertEqual(rv.status_code, 422)
         response = json.loads(rv.data.decode("utf-8"))
-        expected_response = {"message": {"slug": ["Must be unique"]}}
+        expected_response = {"message": {"slug": "Must be unique"}}
         self.assertEqual(response, expected_response)
 
         db.session.delete(dashboard1)
