@@ -265,7 +265,7 @@ class DatasetApiTests(SupersetTestCase):
         rv = self.post_assert_metric(uri, table_data, "post")
         self.assertEqual(rv.status_code, 422)
         data = json.loads(rv.data.decode("utf-8"))
-        expected_result = {"message": {"owners": ["Owners are invalid"]}}
+        expected_result = {"message": {"owners": "Owners are invalid"}}
         self.assertEqual(data, expected_result)
 
     def test_create_dataset_validate_uniqueness(self):
@@ -297,7 +297,7 @@ class DatasetApiTests(SupersetTestCase):
         rv = self.post_assert_metric(uri, dataset_data, "post")
         self.assertEqual(rv.status_code, 422)
         data = json.loads(rv.data.decode("utf-8"))
-        self.assertEqual(data, {"message": {"database": ["Database does not exist"]}})
+        self.assertEqual(data, {"message": {"database": "Database does not exist"}})
 
     def test_create_dataset_validate_tables_exists(self):
         """
@@ -367,6 +367,13 @@ class DatasetApiTests(SupersetTestCase):
         self.login(username="admin")
         rv = self.get_assert_metric(uri, "get")
         data = json.loads(rv.data.decode("utf-8"))
+
+        for column in data["result"]["columns"]:
+            column.pop('changed_on', None)
+            column.pop('created_on', None)
+            column.pop('changed_on', None)
+            column.pop('changed_on', None)
+
         data["result"]["columns"].append(new_column_data)
         rv = self.client.put(uri, json={"columns": data["result"]["columns"]})
 
@@ -400,6 +407,12 @@ class DatasetApiTests(SupersetTestCase):
         # Get current cols and alter one
         rv = self.get_assert_metric(uri, "get")
         resp_columns = json.loads(rv.data.decode("utf-8"))["result"]["columns"]
+        for column in resp_columns:
+            column.pop('changed_on', None)
+            column.pop('created_on', None)
+            column.pop('changed_on', None)
+            column.pop('changed_on', None)
+
         resp_columns[0]["groupby"] = False
         resp_columns[0]["filterable"] = False
         v = self.client.put(uri, json={"columns": resp_columns})
@@ -432,7 +445,7 @@ class DatasetApiTests(SupersetTestCase):
         self.assertEqual(rv.status_code, 422)
         data = json.loads(rv.data.decode("utf-8"))
         expected_result = {
-            "message": {"columns": ["One or more columns already exist"]}
+            "message": {"columns": "One or more columns already exist"}
         }
         self.assertEqual(data, expected_result)
         db.session.delete(dataset)
@@ -452,7 +465,7 @@ class DatasetApiTests(SupersetTestCase):
         self.assertEqual(rv.status_code, 422)
         data = json.loads(rv.data.decode("utf-8"))
         expected_result = {
-            "message": {"metrics": ["One or more metrics already exist"]}
+            "message": {"metrics": "One or more metrics already exist"}
         }
         self.assertEqual(data, expected_result)
         db.session.delete(dataset)
@@ -477,7 +490,7 @@ class DatasetApiTests(SupersetTestCase):
         self.assertEqual(rv.status_code, 422)
         data = json.loads(rv.data.decode("utf-8"))
         expected_result = {
-            "message": {"columns": ["One or more columns are duplicated"]}
+            "message": {"columns": "One or more columns are duplicated"}
         }
         self.assertEqual(data, expected_result)
         db.session.delete(dataset)
@@ -502,7 +515,7 @@ class DatasetApiTests(SupersetTestCase):
         self.assertEqual(rv.status_code, 422)
         data = json.loads(rv.data.decode("utf-8"))
         expected_result = {
-            "message": {"metrics": ["One or more metrics are duplicated"]}
+            "message": {"metrics": "One or more metrics are duplicated"}
         }
         self.assertEqual(data, expected_result)
         db.session.delete(dataset)

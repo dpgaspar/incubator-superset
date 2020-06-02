@@ -34,7 +34,7 @@ class DatabaseNotFoundValidationError(ValidationError):
     """
 
     def __init__(self) -> None:
-        super().__init__(_("Database does not exist"), field_names=["database"])
+        super().__init__(_("Database does not exist"), field_name="database")
 
 
 class DatabaseChangeValidationError(ValidationError):
@@ -43,7 +43,7 @@ class DatabaseChangeValidationError(ValidationError):
     """
 
     def __init__(self) -> None:
-        super().__init__(_("Database not allowed to change"), field_names=["database"])
+        super().__init__(_("Database not allowed to change"), field_name="database")
 
 
 class DatasetExistsValidationError(ValidationError):
@@ -53,7 +53,7 @@ class DatasetExistsValidationError(ValidationError):
 
     def __init__(self, table_name: str) -> None:
         super().__init__(
-            get_datasource_exist_error_msg(table_name), field_names=["table_name"]
+            get_datasource_exist_error_msg(table_name), field_name="table_name"
         )
 
 
@@ -63,7 +63,7 @@ class DatasetColumnNotFoundValidationError(ValidationError):
     """
 
     def __init__(self) -> None:
-        super().__init__(_("One or more columns do not exist"), field_names=["columns"])
+        super().__init__(_("One or more columns do not exist"), field_name="columns")
 
 
 class DatasetColumnsDuplicateValidationError(ValidationError):
@@ -73,7 +73,7 @@ class DatasetColumnsDuplicateValidationError(ValidationError):
 
     def __init__(self) -> None:
         super().__init__(
-            _("One or more columns are duplicated"), field_names=["columns"]
+            _("One or more columns are duplicated"), field_name="columns"
         )
 
 
@@ -84,7 +84,7 @@ class DatasetColumnsExistsValidationError(ValidationError):
 
     def __init__(self) -> None:
         super().__init__(
-            _("One or more columns already exist"), field_names=["columns"]
+            _("One or more columns already exist"), field_name="columns"
         )
 
 
@@ -94,7 +94,7 @@ class DatasetMetricsNotFoundValidationError(ValidationError):
     """
 
     def __init__(self) -> None:
-        super().__init__(_("One or more metrics do not exist"), field_names=["metrics"])
+        super().__init__(_("One or more metrics do not exist"), field_name="metrics")
 
 
 class DatasetMetricsDuplicateValidationError(ValidationError):
@@ -104,7 +104,7 @@ class DatasetMetricsDuplicateValidationError(ValidationError):
 
     def __init__(self) -> None:
         super().__init__(
-            _("One or more metrics are duplicated"), field_names=["metrics"]
+            _("One or more metrics are duplicated"), field_name="metrics"
         )
 
 
@@ -115,7 +115,7 @@ class DatasetMetricsExistsValidationError(ValidationError):
 
     def __init__(self) -> None:
         super().__init__(
-            _("One or more metrics already exist"), field_names=["metrics"]
+            _("One or more metrics already exist"), field_name="metrics"
         )
 
 
@@ -139,7 +139,7 @@ class TableNotFoundValidationError(ValidationError):
 
 class OwnersNotFoundValidationError(ValidationError):
     def __init__(self) -> None:
-        super().__init__(_("Owners are invalid"), field_names=["owners"])
+        super().__init__(_("Owners are invalid"), field_name="owners")
 
 
 class DatasetNotFoundError(CommandException):

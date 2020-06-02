@@ -278,7 +278,6 @@ class ChartRestApi(BaseSupersetModelRestApi):
         # This validates custom Schema with custom validations
         except ValidationError as err:
             return self.response_400(message=err.messages)
-
         try:
             changed_model = UpdateChartCommand(g.user, pk, item).run()
             return self.response(200, id=changed_model.id, result=item)
